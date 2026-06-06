@@ -1,0 +1,10 @@
+[package]
+name = "ferrum"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.24", features = ["extension-module", "abi3-py311"] }

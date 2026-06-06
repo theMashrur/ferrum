@@ -1,0 +1,27 @@
+target/
+.venv/
+__pycache__/
+.pytest_cache/
+.maturin/
+.github/
+*.pyc
+*.pyd
+*.pdb
+
+# Local guidance notes kept out of commits on purpose.
+HANDOVER.md
+docs/00-roadmap.md
+docs/01-build-and-package.md
+docs/02-core-design.md
+docs/03-python-surface.md
+docs/04-threading-and-the-gil.md
+docs/05-verification.md
+docs/06-arithmetic.md
+docs/07-qr-decomposition.md
+docs/08-fast-fourier-transforms.md
+docs/09-lu-decomposition.md
+docs/10-schur-decomposition.md
+docs/11-singular-value-decomposition.md
+docs/12-cholesky-decomposition.md
+docs/13-least-squares-via-qr.md
+docs/14-testing-rust-python-integration.md
