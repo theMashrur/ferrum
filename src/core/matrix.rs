@@ -1,7 +1,6 @@
 use std::fmt;
 use std::ops;
 use std::cmp;
-use super::complex::Complex;
 
 #[derive(Debug, Clone)]
 pub struct Matrix<T> {
@@ -10,9 +9,14 @@ pub struct Matrix<T> {
     pub data: Vec<T>,
 }
 
-// Concrete aliases used throughout the project.
+// Central Trait
+pub trait MatrixRead<T> {
+    fn rows(&self) -> usize;
+    fn cols(&self) -> usize;
+    fn get(&self, row: usize, col: usize) -> &T;
+}
+
 pub type RealMatrix = Matrix<f64>;
-pub type ComplexMatrix = Matrix<Complex>;
 
 // Pretty-printer for matrices with NumPy-like truncation for large shapes.
 impl<T> fmt::Display for Matrix<T>
@@ -65,201 +69,17 @@ where
     }
 }
 
-// ---------- Addition ----------
-
-// Owned + owned matrix addition for the same scalar type.
-impl<T> ops::Add<Matrix<T>> for Matrix<T>  where T: ops::Add<Output = T> + Copy {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        assert_eq!(self.rows, rhs.rows);
-        assert_eq!(self.cols, rhs.cols);
-        let data = self.data.iter().zip(rhs.data.iter())
-            .map(|(a, b)| *a + *b)
-            .collect();
-        Matrix { rows: self.rows, cols: self.cols, data }
+impl MatrixRead<f64> for Matrix<f64>{
+    fn rows(&self) -> usize {
+        self.rows
     }
-}
 
-// Borrowed + borrowed matrix addition for the same scalar type.
-impl<T> ops::Add<&Matrix<T>> for &Matrix<T>  where T: ops::Add<Output = T> + Copy {
-    type Output = Matrix<T>;
-
-    fn add(self, rhs: &Matrix<T>) -> Self::Output {
-        assert_eq!(self.rows, rhs.rows);
-        assert_eq!(self.cols, rhs.cols);
-        let data = self.data.iter().zip(rhs.data.iter())
-            .map(|(a, b)| *a + *b)
-            .collect();
-        Matrix { rows: self.rows, cols: self.cols, data }
+    fn cols(&self) -> usize {
+        self.cols
     }
-}
 
-// Real + complex promotes to complex.
-impl ops::Add<Matrix<Complex>> for Matrix<f64> {
-    type Output = ComplexMatrix;
-
-    fn add(self, rhs: Matrix<Complex>) -> Matrix<Complex> { 
-        assert_eq!(self.rows, rhs.rows);
-        assert_eq!(self.cols, rhs.cols);
-        let data = self.data.iter().zip(rhs.data.iter())
-        .map(|(a, b)| Complex { real: *a + b.real, imag: b.imag}).collect();
-        ComplexMatrix { rows: self.rows, cols: self.cols, data }
-    }
-}
-
-// Borrowed real + borrowed complex promotes to complex.
-impl ops::Add<&Matrix<Complex>> for &Matrix<f64> {
-    type Output = ComplexMatrix;
-
-    fn add(self, rhs: &Matrix<Complex>) -> Matrix<Complex> { 
-        assert_eq!(self.rows, rhs.rows);
-        assert_eq!(self.cols, rhs.cols);
-        let data = self.data.iter().zip(rhs.data.iter())
-        .map(|(a, b)| Complex { real: *a + b.real, imag: b.imag}).collect();
-        ComplexMatrix { rows: self.rows, cols: self.cols, data }
-    }
-}
-
-// Complex + real delegates to the real + complex implementation.
-impl ops::Add<Matrix<f64>> for Matrix<Complex> {
-    type Output = Matrix<Complex>;
-
-    fn add(self, rhs: Matrix<f64>) -> Matrix<Complex> { 
-        assert_eq!(self.rows, rhs.rows);
-        assert_eq!(self.cols, rhs.cols);
-        rhs + self
-    }
-}
-
-// Borrowed complex + borrowed real delegates to the borrowed real + borrowed complex implementation.
-impl ops::Add<&Matrix<f64>> for &Matrix<Complex> {
-    type Output = Matrix<Complex>;
-
-    fn add(self, rhs: &Matrix<f64>) -> Matrix<Complex> { 
-        assert_eq!(self.rows, rhs.rows);
-        assert_eq!(self.cols, rhs.cols);
-        rhs + self
-    }
-}
-
-// ---------- Scalar Multiplication ----------
-
-// Owned matrix by real scalar multiplication.
-impl<T> ops::Mul<f64> for Matrix<T> where T: ops::Mul<f64, Output = T> + Copy {
-    type Output = Self;
-
-    fn mul(self, rhs: f64) -> Self::Output {
-        let data = self.data.iter()
-            .map(|x| *x * rhs)
-            .collect();
-        Matrix { rows: self.rows, cols: self.cols, data }
-    }
-}
-
-// Borrowed matrix by real scalar multiplication.
-impl<T> ops::Mul<f64> for &Matrix<T> where T: ops::Mul<f64, Output = T> + Copy {
-    type Output = Matrix<T>;
-
-    fn mul(self, rhs: f64) -> Self::Output {
-        let data = self.data.iter()
-            .map(|x| *x * rhs)
-            .collect();
-        Matrix { rows: self.rows, cols: self.cols, data }
-    }
-}
-
-// Owned matrix by complex scalar multiplication.
-impl<T> ops::Mul<Complex> for Matrix<T> where T: ops::Mul<Complex, Output = T> + Copy {
-    type Output = Self;
-
-    fn mul(self, rhs: Complex) -> Self::Output {
-        let data = self.data.iter()
-            .map(|x| *x * rhs)
-            .collect();
-        Matrix { rows: self.rows, cols: self.cols, data }
-    }
-}
-
-// Borrowed matrix by complex scalar multiplication.
-impl<T> ops::Mul<Complex> for &Matrix<T> where T: ops::Mul<Complex, Output = T> + Copy {
-    type Output = Matrix<T>;
-
-    fn mul(self, rhs: Complex) -> Self::Output {
-        let data = self.data.iter()
-            .map(|x| *x * rhs)
-            .collect();
-        Matrix { rows: self.rows, cols: self.cols, data }
-    }
-}
-
-// ---------- Subtraction ----------
-
-// Owned - owned implemented via addition and scalar multiplication.
-impl<T> ops::Sub<Matrix<T>> for Matrix<T>
-where
-    T: ops::Sub<Output = T> + ops::Mul<f64, Output = T> + ops::Add<Output = T> + Copy,
-{
-    type Output = Self;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        assert_eq!(self.rows, rhs.rows);
-        assert_eq!(self.cols, rhs.cols);
-        self + (rhs * -1.0)
-    }
-}
-
-// Borrowed - borrowed implemented via addition and scalar multiplication.
-impl<T> ops::Sub<&Matrix<T>> for &Matrix<T>
-where
-    T: ops::Sub<Output = T> + ops::Mul<f64, Output = T> + ops::Add<Output = T> + Copy,
-{
-    type Output = Matrix<T>;
-
-    fn sub(self, rhs: &Matrix<T>) -> Self::Output {
-        assert_eq!(self.rows, rhs.rows);
-        assert_eq!(self.cols, rhs.cols);
-        self + &(rhs * -1.0)
-    }
-}
-
-impl ops::Sub<Matrix<Complex>> for Matrix<f64> {
-    type Output = ComplexMatrix;
-
-    fn sub(self, rhs: Matrix<Complex>) -> Self::Output {
-        assert_eq!(self.rows, rhs.rows);
-        assert_eq!(self.cols, rhs.cols);
-        self + (rhs * -1.0)
-    }
-}
-
-impl ops::Sub<Matrix<f64>> for Matrix<Complex> {
-    type Output = ComplexMatrix;
-
-    fn sub(self, rhs: Matrix<f64>) -> Self::Output {
-        assert_eq!(self.rows, rhs.rows);
-        assert_eq!(self.cols, rhs.cols);
-        (rhs * -1.0) + self
-    }
-}
-
-impl ops::Sub<&Matrix<Complex>> for &Matrix<f64> {
-    type Output = ComplexMatrix;
-
-    fn sub(self, rhs: &Matrix<Complex>) -> Self::Output {
-        assert_eq!(self.rows, rhs.rows);
-        assert_eq!(self.cols, rhs.cols);
-        self + &(rhs * -1.0)
-    }
-}
-
-impl ops::Sub<&Matrix<f64>> for &Matrix<Complex> {
-    type Output = ComplexMatrix;
-
-    fn sub(self, rhs: &Matrix<f64>) -> Self::Output {
-        assert_eq!(self.rows, rhs.rows);
-        assert_eq!(self.cols, rhs.cols);
-        &(rhs * -1.0) + self
+    fn get(&self, row: usize, col: usize) -> &f64 {
+        &self.data[row * self.cols + col]
     }
 }
 
@@ -299,6 +119,9 @@ impl<T> Matrix<T> {
     where 
         T: Copy,
     {
+        if self.rows == 0 || self.cols == 0 {
+            return Matrix {rows: self.cols, cols: self.rows, data: vec![]};
+        }
         let blocksize = blocksize.unwrap_or(32);
         let mut transposed_data = vec![self.data[0]; self.rows * self.cols];
         for i in (0..self.rows).step_by(blocksize) {
@@ -315,347 +138,59 @@ impl<T> Matrix<T> {
         Matrix { rows: self.cols, cols: self.rows, data: transposed_data }
     }
 }
-// ---------- Conversions ----------
 
-// Promote a real matrix to complex by adding zero imaginary parts.
-impl From<Matrix<f64>> for Matrix<Complex> {
-    fn from(matrix: Matrix<f64>) -> Self {
-        let data = matrix.data.into_iter()
-            .map(|x| Complex::from(x))
+
+// ---------- Arithmetic Operations ----------
+
+impl<'a, 'b, T> ops::Add<&'b Matrix<T>> for &'a Matrix<T>
+where 
+    T: Copy + ops::Add<Output=T>, 
+    {
+        type Output = Matrix<T>;
+
+        fn add(self, rhs: &'b Matrix<T>) -> Matrix<T> {
+            assert_eq!(self.rows, rhs.rows);
+            assert_eq!(self.cols, rhs.cols);
+
+            let new_data = self.data.iter()
+            .zip(rhs.data.iter())
+            .map(|(&x, &y)| x + y)
             .collect();
-        Matrix { rows: matrix.rows, cols: matrix.cols, data }
-    }
+            
+            Matrix { rows: self.rows, cols: self.cols, data: new_data}
+        }
 }
 
-// ----------- Unit tests ----------
+impl<'a, 'b, T> ops::Sub<&'b Matrix<T>> for &'a Matrix<T>
+where
+    T: Copy + ops::Sub<Output=T>
+    {
+        type Output = Matrix<T>;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+        fn sub(self, rhs: &'b Matrix<T>) -> Matrix<T> {
+            assert_eq!(self.rows, rhs.rows);
+            assert_eq!(self.cols, rhs.cols);
 
-    // Test cases for real-valued matrix operations.
-    #[test]
-    fn test_real_matrix_addition() {
-        let a = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let b = Matrix::new(2, 2, vec![5.0, 6.0, 7.0, 8.0]);
-        let c = a + b;
-        assert_eq!(c.data, vec![6.0, 8.0, 10.0, 12.0]);
+            let new_data = self.data.iter()
+            .zip(rhs.data.iter())
+            .map(|(&x, &y)| x - y)
+            .collect();
+            
+            Matrix { rows: self.rows, cols: self.cols, data: new_data}
+        }
     }
 
-    #[test]
-    fn test_real_matrix_borrowed_addition() {
-        let a = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let b = Matrix::new(2, 2, vec![5.0, 6.0, 7.0, 8.0]);
-        let c = &a + &b;
-        assert_eq!(c.data, vec![6.0, 8.0, 10.0, 12.0]);
+impl<'a, T> ops::Mul<T> for &'a Matrix<T>
+where
+    T: Copy + ops::Mul<Output=T>
+    {
+        type Output = Matrix<T>;
+
+        fn mul(self, rhs: T) -> Matrix<T> {
+            let new_data = self.data.iter()
+            .map(|&x| x * rhs)
+            .collect();
+            
+            Matrix { rows: self.rows, cols: self.cols, data: new_data}
+        }
     }
-
-    #[test]
-    fn test_real_matrix_subtraction() {
-        let a = Matrix::new(2, 2, vec![5.0, 6.0, 7.0, 8.0]);
-        let b = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let c = a - b;
-        assert_eq!(c.data, vec![4.0, 4.0, 4.0, 4.0]);
-    }
-
-    #[test]
-    fn test_real_matrix_borrowed_subtraction() {
-        let a = Matrix::new(2, 2, vec![5.0, 6.0, 7.0, 8.0]);
-        let b = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let c = &a - &b;
-        assert_eq!(c.data, vec![4.0, 4.0, 4.0, 4.0]);
-    }
-
-    #[test]
-    fn test_real_matrix_scalar_multiplication() {
-        let a = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let c = a * 2.0;
-        assert_eq!(c.data, vec![2.0, 4.0, 6.0, 8.0]);
-    }
-
-    // Test cases for complex-valued matrix operations
-
-    #[test]
-    fn test_complex_matrix_addition() {
-        let a: ComplexMatrix = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 1.0, imag: 1.0 },
-            Complex { real: 2.0, imag: 2.0 },
-            Complex { real: 3.0, imag: 3.0 },
-            Complex { real: 4.0, imag: 4.0 },
-        ]);
-        let b: ComplexMatrix = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 5.0, imag: 5.0 },
-            Complex { real: 6.0, imag: 6.0 },
-            Complex { real: 7.0, imag: 7.0 },
-            Complex { real: 8.0, imag: 8.0 },
-        ]);
-        let c: ComplexMatrix = a + b;
-        assert_eq!(c.data, vec![
-            Complex { real: 6.0, imag: 6.0 },
-            Complex { real: 8.0, imag: 8.0 },
-            Complex { real: 10.0, imag: 10.0 },
-            Complex { real: 12.0, imag: 12.0 },
-        ]);
-    }
-
-    #[test]
-    fn test_complex_matrix_borrowed_addition() {
-        let a: ComplexMatrix = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 1.0, imag: 1.0 },
-            Complex { real: 2.0, imag: 2.0 },
-            Complex { real: 3.0, imag: 3.0 },
-            Complex { real: 4.0, imag: 4.0 },
-        ]);
-        let b: ComplexMatrix = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 5.0, imag: 5.0 },
-            Complex { real: 6.0, imag: 6.0 },
-            Complex { real: 7.0, imag: 7.0 },
-            Complex { real: 8.0, imag: 8.0 },
-        ]);
-        let c = &a + &b;
-        assert_eq!(c.data, vec![
-            Complex { real: 6.0, imag: 6.0 },
-            Complex { real: 8.0, imag: 8.0 },
-            Complex { real: 10.0, imag: 10.0 },
-            Complex { real: 12.0, imag: 12.0 },
-        ]);
-    }
-
-    #[test]
-    fn test_complex_matrix_subtraction() {
-        let a: ComplexMatrix = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 5.0, imag: 5.0 },
-            Complex { real: 6.0, imag: 6.0 },
-            Complex { real: 7.0, imag: 7.0 },
-            Complex { real: 8.0, imag: 8.0 },
-        ]);
-        let b: ComplexMatrix = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 1.0, imag: 1.0 },
-            Complex { real: 2.0, imag: 2.0 },
-            Complex { real: 3.0, imag: 3.0 },
-            Complex { real: 4.0, imag: 4.0 },
-        ]);
-        let c = a - b;
-        assert_eq!(c.data, vec![
-            Complex { real: 4.0, imag: 4.0 },
-            Complex { real: 4.0, imag: 4.0 },
-            Complex { real: 4.0, imag: 4.0 },
-            Complex { real: 4.0, imag: 4.0 },
-        ]);
-    }
-
-    #[test]
-    fn test_complex_matrix_borrowed_subtraction() {
-        let a: ComplexMatrix = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 5.0, imag: 5.0 },
-            Complex { real: 6.0, imag: 6.0 },
-            Complex { real: 7.0, imag: 7.0 },
-            Complex { real: 8.0, imag: 8.0 },
-        ]);
-        let b: ComplexMatrix = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 1.0, imag: 1.0 },
-            Complex { real: 2.0, imag: 2.0 },
-            Complex { real: 3.0, imag: 3.0 },
-            Complex { real: 4.0, imag: 4.0 },
-        ]);
-        let c = &a - &b;
-        assert_eq!(c.data, vec![
-            Complex { real: 4.0, imag: 4.0 },
-            Complex { real: 4.0, imag: 4.0 },
-            Complex { real: 4.0, imag: 4.0 },
-            Complex { real: 4.0, imag: 4.0 },
-        ]);
-    }
-
-    #[test]
-    fn test_complex_matrix_scalar_multiplication() {
-        let a: ComplexMatrix = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 1.0, imag: 1.0 },
-            Complex { real: 2.0, imag: 2.0 },
-            Complex { real: 3.0, imag: 3.0 },
-            Complex { real: 4.0, imag: 4.0 },
-        ]);
-        let c = a * 2.0;
-        assert_eq!(c.data, vec![
-            Complex { real: 2.0, imag: 2.0 },
-            Complex { real: 4.0, imag: 4.0 },
-            Complex { real: 6.0, imag: 6.0 },
-            Complex { real: 8.0, imag: 8.0 },
-        ]);
-    }
-
-    #[test]
-    fn test_complex_matrix_scalar_multiplication_complex() {
-        let a: ComplexMatrix = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 1.0, imag: 1.0 },
-            Complex { real: 2.0, imag: 2.0 },
-            Complex { real: 3.0, imag: 3.0 },
-            Complex { real: 4.0, imag: 4.0 },
-        ]);
-        let c = a * Complex { real: 2.0, imag: 3.0 };
-        assert_eq!(c.data, vec![
-            Complex { real: -1.0, imag: 5.0 },
-            Complex { real: -2.0, imag: 10.0 },
-            Complex { real: -3.0, imag: 15.0 },
-            Complex { real: -4.0, imag: 20.0 },
-        ]);
-    }
-
-    #[test]
-    fn test_complex_matrix_borrowed_scalar_multiplication_complex() {
-        let a: ComplexMatrix = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 1.0, imag: 1.0 },
-            Complex { real: 2.0, imag: 2.0 },
-            Complex { real: 3.0, imag: 3.0 },
-            Complex { real: 4.0, imag: 4.0 },
-        ]);
-        let c = &a * Complex { real: 2.0, imag: 3.0 };
-        assert_eq!(c.data, vec![
-            Complex { real: -1.0, imag: 5.0 },
-            Complex { real: -2.0, imag: 10.0 },
-            Complex { real: -3.0, imag: 15.0 },
-            Complex { real: -4.0, imag: 20.0 },
-        ]);
-    }
-
-    // Additional tests for mixed real-complex operations
-
-    #[test]
-    fn test_real_plus_complex() {
-        let a = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let b: ComplexMatrix = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 5.0, imag: 5.0 },
-            Complex { real: 6.0, imag: 6.0 },
-            Complex { real: 7.0, imag: 7.0 },
-            Complex { real: 8.0, imag: 8.0 },
-        ]);
-        let c = a + b;
-        assert_eq!(c.data, vec![
-            Complex { real: 6.0, imag: 5.0 },
-            Complex { real: 8.0, imag: 6.0 },
-            Complex { real: 10.0, imag: 7.0 },
-            Complex { real: 12.0, imag: 8.0 },
-        ]);
-
-        let d = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let e = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 5.0, imag: 5.0 },
-            Complex { real: 6.0, imag: 6.0 },
-            Complex { real: 7.0, imag: 7.0 },
-            Complex { real: 8.0, imag: 8.0 },
-        ]);
-        let f = e + d;
-        assert_eq!(f.data, vec![
-            Complex { real: 6.0, imag: 5.0 },
-            Complex { real: 8.0, imag: 6.0 },
-            Complex { real: 10.0, imag: 7.0 },
-            Complex { real: 12.0, imag: 8.0 },
-        ]);
-    }
-
-    #[test]
-    fn test_borrowed_real_plus_complex() {
-        let a = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let b: ComplexMatrix = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 5.0, imag: 5.0 },
-            Complex { real: 6.0, imag: 6.0 },
-            Complex { real: 7.0, imag: 7.0 },
-            Complex { real: 8.0, imag: 8.0 },
-        ]);
-        let c = &a + &b;
-        assert_eq!(c.data, vec![
-            Complex { real: 6.0, imag: 5.0 },
-            Complex { real: 8.0, imag: 6.0 },
-            Complex { real: 10.0, imag: 7.0 },
-            Complex { real: 12.0, imag: 8.0 },
-        ]);
-
-        let d = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let e = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 5.0, imag: 5.0 },
-            Complex { real: 6.0, imag: 6.0 },
-            Complex { real: 7.0, imag: 7.0 },
-            Complex { real: 8.0, imag: 8.0 },
-        ]);
-        let f = &e + &d;
-        assert_eq!(f.data, vec![
-            Complex { real: 6.0, imag: 5.0 },
-            Complex { real: 8.0, imag: 6.0 },
-            Complex { real: 10.0, imag: 7.0 },
-            Complex { real: 12.0, imag: 8.0 },
-        ]);
-    }
-
-    #[test]
-    fn test_real_minus_complex() {
-        let a = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let b: ComplexMatrix = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 5.0, imag: 5.0 },
-            Complex { real: 6.0, imag: 6.0 },
-            Complex { real: 7.0, imag: 7.0 },
-            Complex { real: 8.0, imag: 8.0 },
-        ]);
-        let c = a - b;
-        assert_eq!(c.data, vec![
-            Complex { real: -4.0, imag: -5.0 },
-            Complex { real: -4.0, imag: -6.0 },
-            Complex { real: -4.0, imag: -7.0 },
-            Complex { real: -4.0, imag: -8.0 },
-        ]);
-        let d = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let e = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 5.0, imag: 5.0 },
-            Complex { real: 6.0, imag: 6.0 },
-            Complex { real: 7.0, imag: 7.0 },
-            Complex { real: 8.0, imag: 8.0 },
-        ]);
-        let f = e - d;
-        assert_eq!(f.data, vec![
-            Complex { real: 4.0, imag: 5.0 },
-            Complex { real: 4.0, imag: 6.0 },
-            Complex { real: 4.0, imag: 7.0 },
-            Complex { real: 4.0, imag: 8.0 },
-        ]);
-    }
-
-    #[test]
-    fn test_borrowed_real_minus_complex() {
-        let a = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let b: ComplexMatrix = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 5.0, imag: 5.0 },
-            Complex { real: 6.0, imag: 6.0 },
-            Complex { real: 7.0, imag: 7.0 },
-            Complex { real: 8.0, imag: 8.0 },
-        ]);
-        let c = &a - &b;
-        assert_eq!(c.data, vec![
-            Complex { real: -4.0, imag: -5.0 },
-            Complex { real: -4.0, imag: -6.0 },
-            Complex { real: -4.0, imag: -7.0 },
-            Complex { real: -4.0, imag: -8.0 },
-        ]);
-        let d = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let e = ComplexMatrix::new(2, 2, vec![
-            Complex { real: 5.0, imag: 5.0 },
-            Complex { real: 6.0, imag: 6.0 },
-            Complex { real: 7.0, imag: 7.0 },
-            Complex { real: 8.0, imag: 8.0 },
-        ]);
-        let f = &e - &d;
-        assert_eq!(f.data, vec![
-            Complex { real: 4.0, imag: 5.0 },
-            Complex { real: 4.0, imag: 6.0 },
-            Complex { real: 4.0, imag: 7.0 },
-            Complex { real: 4.0, imag: 8.0 },
-        ]);
-    }
-
-    #[test]
-    fn test_transpose() {
-        let a = Matrix::new(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
-        let b = a.transpose(None);
-        assert_eq!(b.rows, 3);
-        assert_eq!(b.cols, 2);
-        assert_eq!(b.data, vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0]);
-    }
-}
