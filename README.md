@@ -67,3 +67,12 @@ cargo check
 `ferrum` treats the Python/Rust boundary as orchestration code. Numerical kernels should operate over Rust-native data structures, and Python object interaction should remain localized at API edges. This supports predictable performance and safer multithreading behavior.
 
 The CPython GIL does not block native Rust threading for CPU-bound work that stays on Rust-managed memory. That makes decomposition and transform kernels good candidates for internal parallel execution strategies.
+
+## License
+
+This project is dual-licensed under either:
+
+- MIT ([LICENSE-MIT](LICENSE-MIT))
+- Apache 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+
+You may choose either license when using this project.

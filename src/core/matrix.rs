@@ -1,6 +1,6 @@
+use std::cmp;
 use std::fmt;
 use std::ops;
-use std::cmp;
 
 #[derive(Debug, Clone)]
 pub struct Matrix<T> {
@@ -69,7 +69,7 @@ where
     }
 }
 
-impl MatrixRead<f64> for Matrix<f64>{
+impl MatrixRead<f64> for RealMatrix {
     fn rows(&self) -> usize {
         self.rows
     }
@@ -87,7 +87,11 @@ impl MatrixRead<f64> for Matrix<f64>{
 
 impl<T> Matrix<T> {
     pub fn new(rows: usize, cols: usize, data: Vec<T>) -> Self {
-        assert_eq!(rows * cols, data.len(), "Data length must match rows * cols");
+        assert_eq!(
+            rows * cols,
+            data.len(),
+            "Data length must match rows * cols"
+        );
         Matrix { rows, cols, data }
     }
 }
@@ -105,10 +109,14 @@ impl Matrix<f64> {
 
     pub fn identity(size: usize) -> Self {
         let mut data = Self::zeros(size, size).data;
-        for i in 0..size { 
+        for i in 0..size {
             data[i * size + i] = 1.0;
         }
-        Matrix { rows: size, cols: size, data}
+        Matrix {
+            rows: size,
+            cols: size,
+            data,
+        }
     }
 }
 
@@ -116,18 +124,22 @@ impl Matrix<f64> {
 
 impl<T> Matrix<T> {
     pub fn transpose(&self, blocksize: Option<usize>) -> Self
-    where 
+    where
         T: Copy,
     {
         if self.rows == 0 || self.cols == 0 {
-            return Matrix {rows: self.cols, cols: self.rows, data: vec![]};
+            return Matrix {
+                rows: self.cols,
+                cols: self.rows,
+                data: vec![],
+            };
         }
         let blocksize = blocksize.unwrap_or(32);
         let mut transposed_data = vec![self.data[0]; self.rows * self.cols];
         for i in (0..self.rows).step_by(blocksize) {
             for j in (0..self.cols).step_by(blocksize) {
-                let i_max = cmp::min(i+blocksize, self.rows);
-                let j_max = cmp::min(j+blocksize, self.cols);
+                let i_max = cmp::min(i + blocksize, self.rows);
+                let j_max = cmp::min(j + blocksize, self.cols);
                 for ii in i..i_max {
                     for jj in j..j_max {
                         transposed_data[jj * self.rows + ii] = self.data[ii * self.cols + jj];
@@ -135,62 +147,117 @@ impl<T> Matrix<T> {
                 }
             }
         }
-        Matrix { rows: self.cols, cols: self.rows, data: transposed_data }
+        Matrix {
+            rows: self.cols,
+            cols: self.rows,
+            data: transposed_data,
+        }
     }
 }
-
 
 // ---------- Arithmetic Operations ----------
 
 impl<'a, 'b, T> ops::Add<&'b Matrix<T>> for &'a Matrix<T>
-where 
-    T: Copy + ops::Add<Output=T>, 
-    {
-        type Output = Matrix<T>;
+where
+    T: Copy + ops::Add<Output = T>,
+{
+    type Output = Matrix<T>;
 
-        fn add(self, rhs: &'b Matrix<T>) -> Matrix<T> {
-            assert_eq!(self.rows, rhs.rows);
-            assert_eq!(self.cols, rhs.cols);
+    fn add(self, rhs: &'b Matrix<T>) -> Matrix<T> {
+        assert_eq!(self.rows, rhs.rows);
+        assert_eq!(self.cols, rhs.cols);
 
-            let new_data = self.data.iter()
+        let new_data = self
+            .data
+            .iter()
             .zip(rhs.data.iter())
             .map(|(&x, &y)| x + y)
             .collect();
-            
-            Matrix { rows: self.rows, cols: self.cols, data: new_data}
+
+        Matrix {
+            rows: self.rows,
+            cols: self.cols,
+            data: new_data,
         }
+    }
 }
 
 impl<'a, 'b, T> ops::Sub<&'b Matrix<T>> for &'a Matrix<T>
 where
-    T: Copy + ops::Sub<Output=T>
-    {
-        type Output = Matrix<T>;
+    T: Copy + ops::Sub<Output = T>,
+{
+    type Output = Matrix<T>;
 
-        fn sub(self, rhs: &'b Matrix<T>) -> Matrix<T> {
-            assert_eq!(self.rows, rhs.rows);
-            assert_eq!(self.cols, rhs.cols);
+    fn sub(self, rhs: &'b Matrix<T>) -> Matrix<T> {
+        assert_eq!(self.rows, rhs.rows);
+        assert_eq!(self.cols, rhs.cols);
 
-            let new_data = self.data.iter()
+        let new_data = self
+            .data
+            .iter()
             .zip(rhs.data.iter())
             .map(|(&x, &y)| x - y)
             .collect();
-            
-            Matrix { rows: self.rows, cols: self.cols, data: new_data}
+
+        Matrix {
+            rows: self.rows,
+            cols: self.cols,
+            data: new_data,
         }
     }
+}
 
 impl<'a, T> ops::Mul<T> for &'a Matrix<T>
 where
-    T: Copy + ops::Mul<Output=T>
-    {
-        type Output = Matrix<T>;
+    T: Copy + ops::Mul<Output = T>,
+{
+    type Output = Matrix<T>;
 
-        fn mul(self, rhs: T) -> Matrix<T> {
-            let new_data = self.data.iter()
-            .map(|&x| x * rhs)
-            .collect();
-            
-            Matrix { rows: self.rows, cols: self.cols, data: new_data}
+    fn mul(self, rhs: T) -> Matrix<T> {
+        let new_data = self.data.iter().map(|&x| x * rhs).collect();
+
+        Matrix {
+            rows: self.rows,
+            cols: self.cols,
+            data: new_data,
         }
     }
+}
+
+// ---------- Unit Tests ----------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_matrix_creation() {
+        let m = Matrix::new(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        assert_eq!(m.rows(), 2);
+        assert_eq!(m.cols(), 3);
+        assert_eq!(*m.get(1, 2), 6.0);
+    }
+
+    #[test]
+    fn test_matrix_addition() {
+        let m1 = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+        let m2 = Matrix::new(2, 2, vec![5.0, 6.0, 7.0, 8.0]);
+        let m3 = &m1 + &m2;
+        assert_eq!(m3.data, vec![6.0, 8.0, 10.0, 12.0]);
+    }
+
+    #[test]
+    fn test_matrix_subtraction() {
+        let m1 = Matrix::new(2, 2, vec![5.0, 6.0, 7.0, 8.0]);
+        let m2 = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+        let m3 = &m1 - &m2;
+        assert_eq!(m3.data, vec![4.0, 4.0, 4.0, 4.0]);
+    }
+
+    #[test]
+    fn test_matrix_scalar_multiplication() {
+        let m = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+        let m_scaled = &m * 2.0;
+        assert_eq!(m_scaled.data, vec![2.0, 4.0, 6.0, 8.0]);
+    }
+}
