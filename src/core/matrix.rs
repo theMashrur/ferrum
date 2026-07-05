@@ -1,6 +1,9 @@
 use std::cmp;
 use std::fmt;
 use std::ops;
+use std::ops::Range;
+
+use super::views::{ColView, ColViewMut, MatrixView, MatrixViewMut, RowView, RowViewMut};
 
 #[derive(Debug, Clone)]
 pub struct Matrix<T> {
@@ -69,7 +72,7 @@ where
     }
 }
 
-impl MatrixRead<f64> for RealMatrix {
+impl<'a, T> MatrixRead<T> for Matrix<T> {
     fn rows(&self) -> usize {
         self.rows
     }
@@ -78,7 +81,7 @@ impl MatrixRead<f64> for RealMatrix {
         self.cols
     }
 
-    fn get(&self, row: usize, col: usize) -> &f64 {
+    fn get(&self, row: usize, col: usize) -> &T {
         &self.data[row * self.cols + col]
     }
 }
@@ -86,7 +89,12 @@ impl MatrixRead<f64> for RealMatrix {
 // ---------- Constructors ----------
 
 impl<T> Matrix<T> {
-    pub fn new(rows: usize, cols: usize, data: Vec<T>) -> Self {
+    pub fn new(rows: usize, cols: usize) -> Self {
+        let data = Vec::with_capacity(rows * cols);
+        Matrix { rows, cols, data }
+    }
+
+    pub fn from_data(rows: usize, cols: usize, data: Vec<T>) -> Self {
         assert_eq!(
             rows * cols,
             data.len(),
@@ -157,6 +165,26 @@ impl<T> Matrix<T> {
 
 // ---------- Arithmetic Operations ----------
 
+pub fn add_core<T>(lhs: &Matrix<T>, rhs: &Matrix<T>, out: &mut Matrix<T>)
+where
+    T: Copy + ops::Add<Output = T>,
+{
+    assert_eq!(lhs.rows, rhs.rows);
+    assert_eq!(lhs.cols, rhs.cols);
+    assert_eq!(lhs.rows, out.rows);
+    assert_eq!(lhs.cols, out.cols);
+
+    out.data.clear();
+    out.data.reserve(lhs.rows * lhs.cols);
+
+    for i in 0..lhs.rows {
+        for j in 0..lhs.cols {
+            out.data
+                .push(lhs.data[i * lhs.cols + j] + rhs.data[i * lhs.cols + j]);
+        }
+    }
+}
+
 impl<'a, 'b, T> ops::Add<&'b Matrix<T>> for &'a Matrix<T>
 where
     T: Copy + ops::Add<Output = T>,
@@ -164,20 +192,28 @@ where
     type Output = Matrix<T>;
 
     fn add(self, rhs: &'b Matrix<T>) -> Matrix<T> {
-        assert_eq!(self.rows, rhs.rows);
-        assert_eq!(self.cols, rhs.cols);
+        let mut out = Matrix::new(self.rows, self.cols);
+        add_core(self, rhs, &mut out);
+        out
+    }
+}
 
-        let new_data = self
-            .data
-            .iter()
-            .zip(rhs.data.iter())
-            .map(|(&x, &y)| x + y)
-            .collect();
+pub fn sub_core<T>(lhs: &Matrix<T>, rhs: &Matrix<T>, out: &mut Matrix<T>)
+where
+    T: Copy + ops::Sub<Output = T>,
+{
+    assert_eq!(lhs.rows, rhs.rows);
+    assert_eq!(lhs.cols, rhs.cols);
+    assert_eq!(lhs.rows, out.rows);
+    assert_eq!(lhs.cols, out.cols);
 
-        Matrix {
-            rows: self.rows,
-            cols: self.cols,
-            data: new_data,
+    out.data.clear();
+    out.data.reserve(lhs.rows * lhs.cols);
+
+    for i in 0..lhs.rows {
+        for j in 0..lhs.cols {
+            out.data
+                .push(lhs.data[i * lhs.cols + j] - rhs.data[i * lhs.cols + j]);
         }
     }
 }
@@ -189,20 +225,25 @@ where
     type Output = Matrix<T>;
 
     fn sub(self, rhs: &'b Matrix<T>) -> Matrix<T> {
-        assert_eq!(self.rows, rhs.rows);
-        assert_eq!(self.cols, rhs.cols);
+        let mut out = Matrix::new(self.rows, self.cols);
+        sub_core(self, rhs, &mut out);
+        out
+    }
+}
 
-        let new_data = self
-            .data
-            .iter()
-            .zip(rhs.data.iter())
-            .map(|(&x, &y)| x - y)
-            .collect();
+pub fn scalar_mul_core<T>(matrix: &Matrix<T>, scalar: T, out: &mut Matrix<T>)
+where
+    T: Copy + ops::Mul<Output = T>,
+{
+    assert_eq!(matrix.rows, out.rows);
+    assert_eq!(matrix.cols, out.cols);
 
-        Matrix {
-            rows: self.rows,
-            cols: self.cols,
-            data: new_data,
+    out.data.clear();
+    out.data.reserve(matrix.rows * matrix.cols);
+
+    for i in 0..matrix.rows {
+        for j in 0..matrix.cols {
+            out.data.push(matrix.data[i * matrix.cols + j] * scalar);
         }
     }
 }
@@ -214,12 +255,84 @@ where
     type Output = Matrix<T>;
 
     fn mul(self, rhs: T) -> Matrix<T> {
-        let new_data = self.data.iter().map(|&x| x * rhs).collect();
+        let mut out = Matrix::new(self.rows, self.cols);
+        scalar_mul_core(self, rhs, &mut out);
+        out
+    }
+}
 
-        Matrix {
-            rows: self.rows,
+// ---------- Views and Indexing -------------
+
+impl<T> Matrix<T> {
+    pub fn view(&self, row_range: Range<usize>, col_range: Range<usize>) -> MatrixView<'_, T> {
+        assert!(row_range.start <= row_range.end && row_range.end <= self.rows);
+        assert!(col_range.start <= col_range.end && col_range.end <= self.cols);
+
+        MatrixView {
+            rows: row_range.end - row_range.start,
+            cols: col_range.end - col_range.start,
+            data: &self.data,
+            offset: row_range.start * self.cols + col_range.start,
+            row_stride: self.cols,
+            col_stride: 1,
+        }
+    }
+
+    pub fn view_mut(
+        &mut self,
+        row_range: Range<usize>,
+        col_range: Range<usize>,
+    ) -> MatrixViewMut<'_, T> {
+        assert!(row_range.start <= row_range.end && row_range.end <= self.rows);
+        assert!(col_range.start <= col_range.end && col_range.end <= self.cols);
+
+        MatrixViewMut {
+            rows: row_range.end - row_range.start,
+            cols: col_range.end - col_range.start,
+            data: &mut self.data,
+            offset: row_range.start * self.cols + col_range.start,
+            row_stride: self.cols,
+            col_stride: 1,
+        }
+    }
+
+    pub fn row_view(&self, row: usize) -> RowView<'_, T> {
+        assert!(row < self.rows);
+        RowView {
             cols: self.cols,
-            data: new_data,
+            data: &self.data,
+            offset: row * self.cols,
+            col_stride: 1,
+        }
+    }
+
+    pub fn row_view_mut(&mut self, row: usize) -> RowViewMut<'_, T> {
+        assert!(row < self.rows);
+        RowViewMut {
+            cols: self.cols,
+            data: &mut self.data,
+            offset: row * self.cols,
+            col_stride: 1,
+        }
+    }
+
+    pub fn col_view(&self, col: usize) -> ColView<'_, T> {
+        assert!(col < self.cols);
+        ColView {
+            rows: self.rows,
+            data: &self.data,
+            offset: col,
+            row_stride: self.cols,
+        }
+    }
+
+    pub fn col_view_mut(&mut self, col: usize) -> ColViewMut<'_, T> {
+        assert!(col < self.cols);
+        ColViewMut {
+            rows: self.rows,
+            data: &mut self.data,
+            offset: col,
+            row_stride: self.cols,
         }
     }
 }
@@ -232,7 +345,7 @@ mod tests {
 
     #[test]
     fn test_matrix_creation() {
-        let m = Matrix::new(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let m = Matrix::from_data(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         assert_eq!(m.rows(), 2);
         assert_eq!(m.cols(), 3);
         assert_eq!(*m.get(1, 2), 6.0);
@@ -240,24 +353,68 @@ mod tests {
 
     #[test]
     fn test_matrix_addition() {
-        let m1 = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let m2 = Matrix::new(2, 2, vec![5.0, 6.0, 7.0, 8.0]);
+        let m1 = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+        let m2 = Matrix::from_data(2, 2, vec![5.0, 6.0, 7.0, 8.0]);
         let m3 = &m1 + &m2;
         assert_eq!(m3.data, vec![6.0, 8.0, 10.0, 12.0]);
     }
 
     #[test]
     fn test_matrix_subtraction() {
-        let m1 = Matrix::new(2, 2, vec![5.0, 6.0, 7.0, 8.0]);
-        let m2 = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+        let m1 = Matrix::from_data(2, 2, vec![5.0, 6.0, 7.0, 8.0]);
+        let m2 = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
         let m3 = &m1 - &m2;
         assert_eq!(m3.data, vec![4.0, 4.0, 4.0, 4.0]);
     }
 
     #[test]
     fn test_matrix_scalar_multiplication() {
-        let m = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+        let m = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
         let m_scaled = &m * 2.0;
         assert_eq!(m_scaled.data, vec![2.0, 4.0, 6.0, 8.0]);
+    }
+
+    #[test]
+    fn test_matrix_creation_without_data_preallocates_capacity() {
+        let m: Matrix<f64> = Matrix::new(2, 3);
+        assert_eq!(m.rows(), 2);
+        assert_eq!(m.cols(), 3);
+        assert_eq!(m.data.len(), 0);
+        assert!(m.data.capacity() >= 6);
+    }
+
+    #[test]
+    fn test_matrix_view() {
+        let m = Matrix::from_data(
+            4,
+            4,
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0,
+                16.0,
+            ],
+        );
+        let view = m.view(1..3, 1..3);
+        assert_eq!(view.rows(), 2);
+        assert_eq!(view.cols(), 2);
+        assert_eq!(*view.get(0, 0), 6.0);
+        assert_eq!(*view.get(1, 1), 11.0);
+    }
+
+    #[test]
+    fn test_matrix_row_view() {
+        let m = Matrix::from_data(3, 3, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        let row_view = m.row_view(1);
+        assert_eq!(row_view.cols, 3);
+        assert_eq!(*row_view.get(0, 0), 4);
+        assert_eq!(*row_view.get(0, 2), 6);
+    }
+
+    #[test]
+    fn test_matrix_col_view() {
+        let m = Matrix::from_data(3, 3, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        let col_view = m.col_view(1);
+        assert_eq!(col_view.rows, 3);
+        assert_eq!(*col_view.get(0, 0), 2);
+        assert_eq!(*col_view.get(2, 0), 8);
     }
 }

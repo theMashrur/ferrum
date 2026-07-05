@@ -4,6 +4,7 @@ pub mod complex;
 pub mod dual;
 pub mod elementary_functions;
 pub mod matrix;
+pub mod views;
 
 pub use complex::Complex;
 pub use dual::Dual;
