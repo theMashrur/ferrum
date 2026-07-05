@@ -8,6 +8,44 @@ __pycache__/
 *.pyd
 *.pdb
 
+# Rust
+**/*.rs.bk
+
+# Python environments
+.env
+env/
+venv/
+ENV/
+
+# Python packaging/build outputs
+build/
+dist/
+site/
+.eggs/
+*.egg-info/
+pip-wheel-metadata/
+
+# Python tooling caches
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.tox/
+.nox/
+
+# Coverage and test artifacts
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
 # Local guidance notes kept out of commits on purpose.
 HANDOVER.md
 docs/00-roadmap.md
