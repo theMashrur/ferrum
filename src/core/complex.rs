@@ -1,3 +1,4 @@
+use super::elementary_functions::ElementaryFunctions;
 use std::fmt;
 use std::ops;
 
@@ -88,6 +89,78 @@ impl From<f64> for Complex {
         Complex {
             real: value,
             imag: 0.0,
+        }
+    }
+}
+
+impl ElementaryFunctions for Complex {
+    fn exp(self) -> Self {
+        let exp_real = self.real.exp();
+        Complex {
+            real: exp_real * self.imag.cos(),
+            imag: exp_real * self.imag.sin(),
+        }
+    }
+
+    fn ln(self) -> Self {
+        Complex {
+            real: (self.real.powi(2) + self.imag.powi(2)).sqrt().ln(),
+            imag: self.imag.atan2(self.real),
+        }
+    }
+
+    fn sqrt(self) -> Self {
+        let magnitude = (self.real.powi(2) + self.imag.powi(2)).sqrt();
+        let angle = self.imag.atan2(self.real) / 2.0;
+        Complex {
+            real: magnitude.sqrt() * angle.cos(),
+            imag: magnitude.sqrt() * angle.sin(),
+        }
+    }
+
+    fn powf(self, n: f64) -> Self {
+        let magnitude = (self.real.powi(2) + self.imag.powi(2)).sqrt().powf(n);
+        let angle = self.imag.atan2(self.real) * n;
+        Complex {
+            real: magnitude * angle.cos(),
+            imag: magnitude * angle.sin(),
+        }
+    }
+
+    fn sin(self) -> Self {
+        Complex {
+            real: self.real.sin() * self.imag.cosh(),
+            imag: self.real.cos() * self.imag.sinh(),
+        }
+    }
+
+    fn cos(self) -> Self {
+        Complex {
+            real: self.real.cos() * self.imag.cosh(),
+            imag: -self.real.sin() * self.imag.sinh(),
+        }
+    }
+
+    fn tan(self) -> Self {
+        let sin_val = self.sin();
+        let cos_val = self.cos();
+        Complex {
+            real: sin_val.real / cos_val.real,
+            imag: sin_val.imag / cos_val.real,
+        }
+    }
+
+    fn sinh(self) -> Self {
+        Complex {
+            real: self.real.sinh() * self.imag.cos(),
+            imag: self.real.cosh() * self.imag.sin(),
+        }
+    }
+
+    fn cosh(self) -> Self {
+        Complex {
+            real: self.real.cosh() * self.imag.cos(),
+            imag: self.real.sinh() * self.imag.sin(),
         }
     }
 }

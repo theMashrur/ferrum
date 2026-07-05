@@ -1,3 +1,4 @@
+use super::elementary_functions::ElementaryFunctions;
 use std::fmt;
 use std::ops;
 
@@ -61,11 +62,71 @@ impl ops::Mul<Dual> for Dual {
     }
 }
 
-impl Dual {
-    fn pow(self, power: f64) -> Self {
+impl ElementaryFunctions for Dual {
+    fn exp(self) -> Self {
+        let exp_real = self.real.exp();
         Dual {
-            real: self.real.powf(power),
-            dual: power * self.real.powf(power - 1.0) * self.dual,
+            real: exp_real,
+            dual: exp_real * self.dual,
+        }
+    }
+
+    fn ln(self) -> Self {
+        Dual {
+            real: self.real.ln(),
+            dual: self.dual / self.real,
+        }
+    }
+
+    fn sqrt(self) -> Self {
+        let sqrt_real = self.real.sqrt();
+        Dual {
+            real: sqrt_real,
+            dual: self.dual / (2.0 * sqrt_real),
+        }
+    }
+
+    fn powf(self, n: f64) -> Self {
+        let pow_real = self.real.powf(n);
+        Dual {
+            real: pow_real,
+            dual: n * self.real.powf(n - 1.0) * self.dual,
+        }
+    }
+
+    fn sin(self) -> Self {
+        Dual {
+            real: self.real.sin(),
+            dual: self.dual * self.real.cos(),
+        }
+    }
+
+    fn cos(self) -> Self {
+        Dual {
+            real: self.real.cos(),
+            dual: -self.dual * self.real.sin(),
+        }
+    }
+
+    fn tan(self) -> Self {
+        let cos_real = self.real.cos();
+        Dual {
+            real: self.real.tan(),
+            dual: self.dual / (cos_real * cos_real),
+        }
+    }
+
+    fn sinh(self) -> Self {
+        Dual {
+            real: self.real.sinh(),
+            dual: self.dual * self.real.cosh(),
+        }
+    }
+
+    fn cosh(self) -> Self {
+        Dual {
+            real: self.real.cosh(),
+            dual: self.dual * self.real.sinh(),
         }
     }
 }
@@ -110,6 +171,20 @@ impl ops::Mul<f64> for Dual {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const EPSILON: f64 = 1e-12;
+
+    fn assert_close(actual: f64, expected: f64) {
+        assert!(
+            (actual - expected).abs() <= EPSILON,
+            "expected {expected}, got {actual}, tol {EPSILON}"
+        );
+    }
+
+    fn assert_dual_close(actual: Dual, expected: Dual) {
+        assert_close(actual.real, expected.real);
+        assert_close(actual.dual, expected.dual);
+    }
 
     #[test]
     fn test_addition() {
@@ -177,12 +252,140 @@ mod tests {
             real: 2.0,
             dual: 3.0,
         };
-        let result = a.pow(3.0);
+        let result = a.powf(3.0);
         assert_eq!(
             result,
             Dual {
                 real: 8.0,
                 dual: 36.0
+            }
+        );
+    }
+
+    #[test]
+    fn test_exp() {
+        let a = Dual {
+            real: 1.0,
+            dual: 2.0,
+        };
+        let result = a.exp();
+        assert_eq!(
+            result,
+            Dual {
+                real: std::f64::consts::E,
+                dual: 2.0 * std::f64::consts::E
+            }
+        );
+    }
+
+    #[test]
+    fn test_ln() {
+        let a = Dual {
+            real: std::f64::consts::E,
+            dual: 2.0,
+        };
+        let result = a.ln();
+        assert_eq!(
+            result,
+            Dual {
+                real: 1.0,
+                dual: 2.0 / std::f64::consts::E
+            }
+        );
+    }
+
+    #[test]
+    fn test_sqrt() {
+        let a = Dual {
+            real: 4.0,
+            dual: 2.0,
+        };
+        let result = a.sqrt();
+        assert_eq!(
+            result,
+            Dual {
+                real: 2.0,
+                dual: 0.5
+            }
+        );
+    }
+
+    #[test]
+    fn test_sin() {
+        let a = Dual {
+            real: std::f64::consts::PI / 2.0,
+            dual: 1.0,
+        };
+        let result = a.sin();
+        assert_dual_close(
+            result,
+            Dual {
+                real: 1.0,
+                dual: 0.0,
+            },
+        );
+    }
+
+    #[test]
+    fn test_cos() {
+        let a = Dual {
+            real: std::f64::consts::PI,
+            dual: 1.0,
+        };
+        let result = a.cos();
+        assert_dual_close(
+            result,
+            Dual {
+                real: -1.0,
+                dual: 0.0,
+            },
+        );
+    }
+
+    #[test]
+    fn test_tan() {
+        let a = Dual {
+            real: std::f64::consts::PI / 4.0,
+            dual: 1.0,
+        };
+        let result = a.tan();
+        assert_dual_close(
+            result,
+            Dual {
+                real: 1.0,
+                dual: 2.0,
+            },
+        );
+    }
+
+    #[test]
+    fn test_sinh() {
+        let a = Dual {
+            real: 0.0,
+            dual: 1.0,
+        };
+        let result = a.sinh();
+        assert_eq!(
+            result,
+            Dual {
+                real: 0.0,
+                dual: 1.0
+            }
+        );
+    }
+
+    #[test]
+    fn test_cosh() {
+        let a = Dual {
+            real: 0.0,
+            dual: 1.0,
+        };
+        let result = a.cosh();
+        assert_eq!(
+            result,
+            Dual {
+                real: 1.0,
+                dual: 0.0
             }
         );
     }
