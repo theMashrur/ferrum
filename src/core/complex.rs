@@ -4,16 +4,18 @@ use std::ops;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Complex {
     pub real: f64,
-    pub imag: f64
+    pub imag: f64,
 }
-
 
 impl fmt::Display for Complex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{0}i + {1}j", self.real, self.imag)
+        if self.imag >= 0.0 {
+            write!(f, "{} + {}i", self.real, self.imag)
+        } else {
+            write!(f, "{} - {}i", self.real, -self.imag)
+        }
     }
 }
-
 
 impl ops::Add<Complex> for Complex {
     type Output = Self;
@@ -43,7 +45,7 @@ impl ops::Add<f64> for Complex {
     fn add(self, rhs: f64) -> Self {
         Complex {
             real: self.real + rhs,
-            imag: self.imag
+            imag: self.imag,
         }
     }
 }
@@ -54,7 +56,7 @@ impl ops::Sub<f64> for Complex {
     fn sub(self, rhs: f64) -> Self {
         Complex {
             real: self.real - rhs,
-            imag: self.imag
+            imag: self.imag,
         }
     }
 }
@@ -76,17 +78,19 @@ impl ops::Mul<f64> for Complex {
     fn mul(self, rhs: f64) -> Self {
         Complex {
             real: self.real * rhs,
-            imag: self.imag * rhs
+            imag: self.imag * rhs,
         }
     }
 }
 
 impl From<f64> for Complex {
     fn from(value: f64) -> Self {
-        Complex { real: value, imag: 0.0 }
+        Complex {
+            real: value,
+            imag: 0.0,
+        }
     }
 }
-
 
 // ---------------- Unit tests ----------------
 
@@ -96,42 +100,105 @@ mod tests {
 
     #[test]
     fn test_add() {
-        let a = Complex { real: 1.0, imag: 2.0 };
-        let b = Complex { real: 3.0, imag: 4.0 };
-        assert_eq!(a + b, Complex { real: 4.0, imag: 6.0 });
+        let a = Complex {
+            real: 1.0,
+            imag: 2.0,
+        };
+        let b = Complex {
+            real: 3.0,
+            imag: 4.0,
+        };
+        assert_eq!(
+            a + b,
+            Complex {
+                real: 4.0,
+                imag: 6.0
+            }
+        );
     }
 
     #[test]
     fn test_sub() {
-        let a = Complex { real: 5.0, imag: 6.0 };
-        let b = Complex { real: 2.0, imag: 3.0 };
-        assert_eq!(a - b, Complex { real: 3.0, imag: 3.0 });
+        let a = Complex {
+            real: 5.0,
+            imag: 6.0,
+        };
+        let b = Complex {
+            real: 2.0,
+            imag: 3.0,
+        };
+        assert_eq!(
+            a - b,
+            Complex {
+                real: 3.0,
+                imag: 3.0
+            }
+        );
     }
 
     #[test]
     fn test_mul() {
-        let a = Complex { real: 1.0, imag: 2.0 };
-        let b = Complex { real: 3.0, imag: 4.0 };
-        assert_eq!(a * b, Complex { real: -5.0, imag: 10.0 });
+        let a = Complex {
+            real: 1.0,
+            imag: 2.0,
+        };
+        let b = Complex {
+            real: 3.0,
+            imag: 4.0,
+        };
+        assert_eq!(
+            a * b,
+            Complex {
+                real: -5.0,
+                imag: 10.0
+            }
+        );
     }
 
     // Additional tests for mixed real and complex operations
 
     #[test]
     fn test_add_real() {
-        let a = Complex { real: 1.0, imag: 2.0 };
-        assert_eq!(a + 3.0, Complex { real: 4.0, imag: 2.0 });
+        let a = Complex {
+            real: 1.0,
+            imag: 2.0,
+        };
+        assert_eq!(
+            a + 3.0,
+            Complex {
+                real: 4.0,
+                imag: 2.0
+            }
+        );
     }
 
     #[test]
     fn test_sub_real() {
-        let a = Complex { real: 5.0, imag: 6.0 };
-        assert_eq!(a - 2.0, Complex { real: 3.0, imag: 6.0 });
+        let a = Complex {
+            real: 5.0,
+            imag: 6.0,
+        };
+        assert_eq!(
+            a - 2.0,
+            Complex {
+                real: 3.0,
+                imag: 6.0
+            }
+        );
     }
 
     #[test]
     fn test_mul_real() {
-        let a = Complex { real: 1.0, imag: 2.0 };
-        assert_eq!(a * 3.0, Complex { real: 3.0, imag: 6.0 });
+        let a = Complex {
+            real: 1.0,
+            imag: 2.0,
+        };
+        assert_eq!(
+            a * 3.0,
+            Complex {
+                real: 3.0,
+                imag: 6.0
+            }
+        );
     }
 }

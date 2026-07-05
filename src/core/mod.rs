@@ -1,8 +1,10 @@
 //! Core numeric data structures and invariants.
 
-pub mod matrix;
 pub mod complex;
+pub mod dual;
+pub mod matrix;
 
+pub use complex::Complex;
+pub use dual::Dual;
 pub use matrix::Matrix;
 pub use matrix::RealMatrix;
-pub use complex::Complex;
