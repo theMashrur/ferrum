@@ -29,6 +29,13 @@ impl ops::Add<Complex> for Complex {
     }
 }
 
+impl ops::AddAssign<Complex> for Complex {
+    fn add_assign(&mut self, rhs: Self) {
+        self.real += rhs.real;
+        self.imag += rhs.imag;
+    }
+}
+
 impl ops::Sub<Complex> for Complex {
     type Output = Self;
 
@@ -186,6 +193,27 @@ mod tests {
             Complex {
                 real: 4.0,
                 imag: 6.0
+            }
+        );
+    }
+
+    #[test]
+    fn test_add_assign() {
+        let mut value = Complex {
+            real: 1.0,
+            imag: 2.0,
+        };
+
+        value += Complex {
+            real: 3.0,
+            imag: 4.0,
+        };
+
+        assert_eq!(
+            value,
+            Complex {
+                real: 4.0,
+                imag: 6.0,
             }
         );
     }

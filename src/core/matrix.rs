@@ -17,6 +17,24 @@ pub trait MatrixRead<T> {
     fn rows(&self) -> usize;
     fn cols(&self) -> usize;
     fn get(&self, row: usize, col: usize) -> &T;
+
+    fn is_row_contiguous(&self) -> bool;
+    fn row(&self, row: usize) -> RowView<'_, T>;
+}
+
+pub trait MatrixWrite<T>: MatrixRead<T> {
+    fn get_mut(&mut self, row: usize, col: usize) -> &mut T;
+
+    fn accumulate(&mut self, row: usize, col: usize, value: T)
+    where
+        T: ops::AddAssign,
+    {
+        let elem = self.get_mut(row, col);
+        *elem += value;
+    }
+
+    fn row_mut(&mut self, row: usize) -> RowViewMut<'_, T>;
+    fn col_mut(&mut self, col: usize) -> ColViewMut<'_, T>;
 }
 
 pub type RealMatrix = Matrix<f64>;
@@ -84,14 +102,56 @@ impl<'a, T> MatrixRead<T> for Matrix<T> {
     fn get(&self, row: usize, col: usize) -> &T {
         &self.data[row * self.cols + col]
     }
+
+    fn is_row_contiguous(&self) -> bool {
+        true
+    }
+
+    fn row(&self, row: usize) -> RowView<'_, T> {
+        assert!(row < self.rows);
+        RowView {
+            cols: self.cols,
+            data: &self.data,
+            offset: row * self.cols,
+            col_stride: 1,
+        }
+    }
+}
+
+impl<T> MatrixWrite<T> for Matrix<T> {
+    fn get_mut(&mut self, row: usize, col: usize) -> &mut T {
+        &mut self.data[row * self.cols + col]
+    }
+
+    fn row_mut(&mut self, row: usize) -> RowViewMut<'_, T> {
+        assert!(row < self.rows);
+        RowViewMut {
+            cols: self.cols,
+            data: &mut self.data,
+            offset: row * self.cols,
+            col_stride: 1,
+        }
+    }
+
+    fn col_mut(&mut self, col: usize) -> ColViewMut<'_, T> {
+        assert!(col < self.cols);
+        ColViewMut {
+            rows: self.rows,
+            data: &mut self.data,
+            offset: col,
+            row_stride: self.cols,
+        }
+    }
 }
 
 // ---------- Constructors ----------
 
 impl<T> Matrix<T> {
-    pub fn new(rows: usize, cols: usize) -> Self {
-        let data = Vec::with_capacity(rows * cols);
-        Matrix { rows, cols, data }
+    pub fn new(rows: usize, cols: usize) -> Self
+    where
+        T: From<f64> + Copy,
+    {
+        Self::zeros(rows, cols)
     }
 
     pub fn from_data(rows: usize, cols: usize, data: Vec<T>) -> Self {
@@ -102,19 +162,22 @@ impl<T> Matrix<T> {
         );
         Matrix { rows, cols, data }
     }
+
+    pub fn zeros(rows: usize, cols: usize) -> Self
+    where
+        T: From<f64> + Copy,
+    {
+        Matrix {
+            rows,
+            cols,
+            data: vec![T::from(0.0); rows * cols],
+        }
+    }
 }
 
 // ---------- Utilities (Real Matrices) ----------
 
 impl Matrix<f64> {
-    pub fn zeros(rows: usize, cols: usize) -> Self {
-        Matrix {
-            rows,
-            cols,
-            data: vec![0.0; rows * cols],
-        }
-    }
-
     pub fn identity(size: usize) -> Self {
         let mut data = Self::zeros(size, size).data;
         for i in 0..size {
@@ -174,20 +237,16 @@ where
     assert_eq!(lhs.rows, out.rows);
     assert_eq!(lhs.cols, out.cols);
 
-    out.data.clear();
-    out.data.reserve(lhs.rows * lhs.cols);
-
     for i in 0..lhs.rows {
         for j in 0..lhs.cols {
-            out.data
-                .push(lhs.data[i * lhs.cols + j] + rhs.data[i * lhs.cols + j]);
+            out.data[i * lhs.cols + j] = lhs.data[i * lhs.cols + j] + rhs.data[i * lhs.cols + j];
         }
     }
 }
 
 impl<'a, 'b, T> ops::Add<&'b Matrix<T>> for &'a Matrix<T>
 where
-    T: Copy + ops::Add<Output = T>,
+    T: Copy + ops::Add<Output = T> + From<f64>,
 {
     type Output = Matrix<T>;
 
@@ -207,20 +266,16 @@ where
     assert_eq!(lhs.rows, out.rows);
     assert_eq!(lhs.cols, out.cols);
 
-    out.data.clear();
-    out.data.reserve(lhs.rows * lhs.cols);
-
     for i in 0..lhs.rows {
         for j in 0..lhs.cols {
-            out.data
-                .push(lhs.data[i * lhs.cols + j] - rhs.data[i * lhs.cols + j]);
+            out.data[i * lhs.cols + j] = lhs.data[i * lhs.cols + j] - rhs.data[i * lhs.cols + j];
         }
     }
 }
 
 impl<'a, 'b, T> ops::Sub<&'b Matrix<T>> for &'a Matrix<T>
 where
-    T: Copy + ops::Sub<Output = T>,
+    T: Copy + ops::Sub<Output = T> + From<f64>,
 {
     type Output = Matrix<T>;
 
@@ -238,25 +293,96 @@ where
     assert_eq!(matrix.rows, out.rows);
     assert_eq!(matrix.cols, out.cols);
 
-    out.data.clear();
-    out.data.reserve(matrix.rows * matrix.cols);
-
     for i in 0..matrix.rows {
         for j in 0..matrix.cols {
-            out.data.push(matrix.data[i * matrix.cols + j] * scalar);
+            out.data[i * matrix.cols + j] = matrix.data[i * matrix.cols + j] * scalar;
         }
     }
 }
 
 impl<'a, T> ops::Mul<T> for &'a Matrix<T>
 where
-    T: Copy + ops::Mul<Output = T>,
+    T: Copy + ops::Mul<Output = T> + From<f64>,
 {
     type Output = Matrix<T>;
 
     fn mul(self, rhs: T) -> Matrix<T> {
         let mut out = Matrix::new(self.rows, self.cols);
         scalar_mul_core(self, rhs, &mut out);
+        out
+    }
+}
+
+pub fn gemm_kernel<A, B, C, T>(a: &A, b: &B, out: &mut C, alpha: Option<T>, beta: Option<T>)
+where
+    A: MatrixRead<T>,
+    B: MatrixRead<T>,
+    C: MatrixWrite<T>,
+    T: Copy
+        + ops::Add<Output = T>
+        + ops::Mul<Output = T>
+        + Default
+        + PartialEq
+        + From<f64>
+        + ops::AddAssign<T>
+        + ops::Sub<Output = T>,
+{
+    assert_eq!(
+        a.cols(),
+        b.rows(),
+        "Inner dimensions {} and {} must match for matrix multiplication",
+        a.cols(),
+        b.rows()
+    );
+    let m = a.rows();
+    let k_dim = a.cols();
+    let n = b.cols();
+    let beta = beta.unwrap_or(T::from(0.0));
+    let alpha = alpha.unwrap_or(T::from(1.0));
+
+    // beta scaling block: skip if beta is zero
+    if beta != T::from(1.0) {
+        for i in 0..m {
+            for j in 0..n {
+                out.accumulate(i, j, (beta - T::from(1.0)) * (*out.get(i, j)));
+            }
+        }
+    }
+
+    // Matrix Multiplication block: skip if alpha is zero
+    if alpha != T::from(0.0) {
+        for i in 0..m {
+            for k in 0..k_dim {
+                let a_ik = a.get(i, k);
+                for j in 0..n {
+                    let b_kj = b.get(k, j);
+                    out.accumulate(i, j, (*a_ik) * (*b_kj) * alpha);
+                }
+            }
+        }
+    }
+}
+
+impl<'a, 'b, T> ops::Mul<&'b Matrix<T>> for &'a Matrix<T>
+where
+    T: Copy
+        + ops::Add<Output = T>
+        + ops::Mul<Output = T>
+        + Default
+        + PartialEq
+        + From<f64>
+        + ops::AddAssign<T>
+        + ops::Sub<Output = T>,
+{
+    type Output = Matrix<T>;
+
+    fn mul(self, rhs: &'b Matrix<T>) -> Matrix<T> {
+        assert_eq!(
+            self.cols, rhs.rows,
+            "Inner dimensions must match for matrix multiplication"
+        );
+        let mut out = Matrix::zeros(self.rows, rhs.cols);
+        gemm_kernel(self, rhs, &mut out, None, None);
         out
     }
 }
@@ -375,12 +501,11 @@ mod tests {
     }
 
     #[test]
-    fn test_matrix_creation_without_data_preallocates_capacity() {
+    fn test_matrix_new_initializes_with_zeros() {
         let m: Matrix<f64> = Matrix::new(2, 3);
         assert_eq!(m.rows(), 2);
         assert_eq!(m.cols(), 3);
-        assert_eq!(m.data.len(), 0);
-        assert!(m.data.capacity() >= 6);
+        assert_eq!(m.data, vec![0.0; 6]);
     }
 
     #[test]
@@ -416,5 +541,95 @@ mod tests {
         assert_eq!(col_view.rows, 3);
         assert_eq!(*col_view.get(0, 0), 2);
         assert_eq!(*col_view.get(2, 0), 8);
+    }
+
+    #[test]
+    fn test_gemm_kernel_basic() {
+        let a = Matrix::from_data(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let b = Matrix::from_data(3, 2, vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
+        let mut out = Matrix::zeros(2, 2);
+
+        gemm_kernel(&a, &b, &mut out, None, None);
+
+        // Manual calculation: [[1*7 + 2*9 + 3*11, 1*8 + 2*10 + 3*12], [4*7 + 5*9 + 6*11, 4*8 + 5*10 + 6*12]]
+        // = [[58, 64], [139, 154]]
+        assert_eq!(*out.get(0, 0), 58.0);
+        assert_eq!(*out.get(0, 1), 64.0);
+        assert_eq!(*out.get(1, 0), 139.0);
+        assert_eq!(*out.get(1, 1), 154.0);
+    }
+
+    #[test]
+    fn test_gemm_kernel_with_alpha() {
+        let a = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+        let b = Matrix::from_data(2, 2, vec![2.0, 0.0, 1.0, 2.0]);
+        let mut out = Matrix::zeros(2, 2);
+
+        gemm_kernel(&a, &b, &mut out, Some(2.0), None);
+
+        // Expected: 2 * (A * B) = 2 * [[4, 4], [10, 8]]
+        assert_eq!(*out.get(0, 0), 8.0);
+        assert_eq!(*out.get(0, 1), 8.0);
+        assert_eq!(*out.get(1, 0), 20.0);
+        assert_eq!(*out.get(1, 1), 16.0);
+    }
+
+    #[test]
+    fn test_gemm_kernel_with_beta() {
+        let a = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+        let b = Matrix::from_data(2, 2, vec![2.0, 0.0, 1.0, 2.0]);
+        let mut out = Matrix::from_data(2, 2, vec![1.0, 1.0, 1.0, 1.0]);
+
+        gemm_kernel(&a, &b, &mut out, None, Some(2.0));
+
+        // Expected: beta * out + A * B = 2*out + A*B = [[6, 6], [12, 10]]
+        assert_eq!(*out.get(0, 0), 6.0);
+        assert_eq!(*out.get(0, 1), 6.0);
+        assert_eq!(*out.get(1, 0), 12.0);
+        assert_eq!(*out.get(1, 1), 10.0);
+    }
+
+    #[test]
+    fn test_gemm_kernel_with_alpha_and_beta() {
+        let a = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+        let b = Matrix::from_data(2, 2, vec![2.0, 0.0, 1.0, 2.0]);
+        let mut out = Matrix::from_data(2, 2, vec![1.0, 1.0, 1.0, 1.0]);
+
+        gemm_kernel(&a, &b, &mut out, Some(3.0), Some(2.0));
+
+        // Expected: beta * out + alpha * A * B = 2*out + 3*(A*B) = [[14, 14], [32, 26]]
+        assert_eq!(*out.get(0, 0), 14.0);
+        assert_eq!(*out.get(0, 1), 14.0);
+        assert_eq!(*out.get(1, 0), 32.0);
+        assert_eq!(*out.get(1, 1), 26.0);
+    }
+
+    #[test]
+    fn test_gemm_kernel_zero_alpha() {
+        let a = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+        let b = Matrix::from_data(2, 2, vec![2.0, 0.0, 1.0, 2.0]);
+        let mut out = Matrix::from_data(2, 2, vec![5.0, 5.0, 5.0, 5.0]);
+
+        gemm_kernel(&a, &b, &mut out, Some(0.0), Some(2.0));
+
+        // Expected: only beta scaling, so 2*out
+        assert_eq!(*out.get(0, 0), 10.0);
+        assert_eq!(*out.get(0, 1), 10.0);
+        assert_eq!(*out.get(1, 0), 10.0);
+        assert_eq!(*out.get(1, 1), 10.0);
+    }
+
+    #[test]
+    fn test_matmul_operator() {
+        let a = Matrix::from_data(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let b = Matrix::from_data(3, 2, vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
+        let c = &a * &b;
+
+        // Manual calculation: [[1*7 + 2*9 + 3*11, 1*8 + 2*10 + 3*12], [4*7 + 5*9 + 6*11, 4*8 + 5*10 + 6*12]]
+        // = [[58, 64], [139, 154]]
+        assert_eq!(*c.get(0, 0), 58.0);
+        assert_eq!(*c.get(0, 1), 64.0);
+        assert_eq!(*c.get(1, 0), 139.0);
+        assert_eq!(*c.get(1, 1), 154.0);
     }
 }

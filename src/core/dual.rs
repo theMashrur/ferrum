@@ -40,6 +40,13 @@ impl ops::Add<Dual> for Dual {
     }
 }
 
+impl ops::AddAssign<Dual> for Dual {
+    fn add_assign(&mut self, rhs: Self) {
+        self.real += rhs.real;
+        self.dual += rhs.dual;
+    }
+}
+
 impl ops::Sub<Dual> for Dual {
     type Output = Self;
 
@@ -202,6 +209,27 @@ mod tests {
             Dual {
                 real: 6.0,
                 dual: 8.0
+            }
+        );
+    }
+
+    #[test]
+    fn test_add_assign() {
+        let mut value = Dual {
+            real: 2.0,
+            dual: 3.0,
+        };
+
+        value += Dual {
+            real: 4.0,
+            dual: 5.0,
+        };
+
+        assert_eq!(
+            value,
+            Dual {
+                real: 6.0,
+                dual: 8.0,
             }
         );
     }

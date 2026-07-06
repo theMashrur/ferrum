@@ -1,4 +1,5 @@
 use super::matrix::MatrixRead;
+use super::matrix::MatrixWrite;
 use std::fmt;
 
 pub struct MatrixView<'a, T> {
@@ -61,6 +62,20 @@ macro_rules! impl_matrix_read_for_view {
             fn get(&self, row: usize, col: usize) -> &T {
                 let index = self.offset + row * self.row_stride + col * self.col_stride;
                 &self.data[index]
+            }
+
+            fn is_row_contiguous(&self) -> bool {
+                self.col_stride == 1
+            }
+
+            fn row(&self, row: usize) -> RowView<'_, T> {
+                assert!(row < self.rows, "Row index out of bounds");
+                RowView {
+                    cols: self.cols,
+                    data: self.data,
+                    offset: self.offset + row * self.row_stride,
+                    col_stride: self.col_stride,
+                }
             }
         }
     };
@@ -135,6 +150,19 @@ impl<T> MatrixRead<T> for RowView<'_, T> {
         let index = self.offset + col * self.col_stride;
         &self.data[index]
     }
+
+    fn is_row_contiguous(&self) -> bool {
+        self.col_stride == 1
+    }
+
+    fn row(&self, _row: usize) -> RowView<'_, T> {
+        RowView {
+            cols: self.cols,
+            data: self.data,
+            offset: self.offset,
+            col_stride: self.col_stride,
+        }
+    }
 }
 
 impl<T> MatrixRead<T> for RowViewMut<'_, T> {
@@ -150,6 +178,19 @@ impl<T> MatrixRead<T> for RowViewMut<'_, T> {
         let index = self.offset + col * self.col_stride;
         &self.data[index]
     }
+
+    fn is_row_contiguous(&self) -> bool {
+        self.col_stride == 1
+    }
+
+    fn row(&self, _row: usize) -> RowView<'_, T> {
+        RowView {
+            cols: self.cols,
+            data: self.data,
+            offset: self.offset,
+            col_stride: self.col_stride,
+        }
+    }
 }
 
 impl<T> MatrixRead<T> for ColView<'_, T> {
@@ -164,5 +205,46 @@ impl<T> MatrixRead<T> for ColView<'_, T> {
     fn get(&self, row: usize, _col: usize) -> &T {
         let index = self.offset + row * self.row_stride;
         &self.data[index]
+    }
+
+    fn is_row_contiguous(&self) -> bool {
+        self.row_stride == 1
+    }
+
+    fn row(&self, row: usize) -> RowView<'_, T> {
+        assert!(row < self.rows, "Row index out of bounds");
+        RowView {
+            cols: 1,
+            data: self.data,
+            offset: self.offset + row * self.row_stride,
+            col_stride: self.row_stride,
+        }
+    }
+}
+
+impl<T> MatrixWrite<T> for MatrixViewMut<'_, T> {
+    fn get_mut(&mut self, row: usize, col: usize) -> &mut T {
+        let index = self.offset + row * self.row_stride + col * self.col_stride;
+        &mut self.data[index]
+    }
+
+    fn row_mut(&mut self, row: usize) -> RowViewMut<'_, T> {
+        assert!(row < self.rows, "Row index out of bounds");
+        RowViewMut {
+            cols: self.cols,
+            data: self.data,
+            offset: self.offset + row * self.row_stride,
+            col_stride: self.col_stride,
+        }
+    }
+
+    fn col_mut(&mut self, col: usize) -> ColViewMut<'_, T> {
+        assert!(col < self.cols, "Column index out of bounds");
+        ColViewMut {
+            rows: self.rows,
+            data: self.data,
+            offset: self.offset + col * self.col_stride,
+            row_stride: self.row_stride,
+        }
     }
 }
