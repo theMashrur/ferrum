@@ -20,6 +20,7 @@ pub trait MatrixRead<T> {
 
     fn is_row_contiguous(&self) -> bool;
     fn row(&self, row: usize) -> RowView<'_, T>;
+    fn col(&self, col: usize) -> ColView<'_, T>;
 }
 
 pub trait MatrixWrite<T>: MatrixRead<T> {
@@ -114,6 +115,16 @@ impl<'a, T> MatrixRead<T> for Matrix<T> {
             data: &self.data,
             offset: row * self.cols,
             col_stride: 1,
+        }
+    }
+
+    fn col(&self, col: usize) -> ColView<'_, T> {
+        assert!(col < self.cols);
+        ColView {
+            rows: self.rows,
+            data: &self.data,
+            offset: col,
+            row_stride: self.cols,
         }
     }
 }
@@ -541,6 +552,55 @@ mod tests {
         assert_eq!(col_view.rows, 3);
         assert_eq!(*col_view.get(0, 0), 2);
         assert_eq!(*col_view.get(2, 0), 8);
+    }
+
+    #[test]
+    fn test_matrix_read_col_on_matrix() {
+        let m = Matrix::from_data(3, 3, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        let col = m.col(1);
+
+        assert_eq!(col.rows(), 3);
+        assert_eq!(col.cols(), 1);
+        assert_eq!(*col.get(0, 0), 2);
+        assert_eq!(*col.get(2, 0), 8);
+    }
+
+    #[test]
+    fn test_matrix_read_col_on_matrix_view() {
+        let m = Matrix::from_data(
+            4,
+            4,
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        );
+        let view = m.view(1..4, 1..3);
+        let col = view.col(1);
+
+        assert_eq!(col.rows(), 3);
+        assert_eq!(col.cols(), 1);
+        assert_eq!(*col.get(0, 0), 7);
+        assert_eq!(*col.get(2, 0), 15);
+    }
+
+    #[test]
+    fn test_matrix_read_col_on_row_view() {
+        let m = Matrix::from_data(3, 3, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        let row = m.row(1);
+        let col = row.col(2);
+
+        assert_eq!(col.rows(), 1);
+        assert_eq!(col.cols(), 1);
+        assert_eq!(*col.get(0, 0), 6);
+    }
+
+    #[test]
+    fn test_matrix_read_col_on_col_view() {
+        let m = Matrix::from_data(3, 3, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        let first_col = m.col(1);
+        let nested_col = first_col.col(0);
+
+        assert_eq!(nested_col.rows(), 3);
+        assert_eq!(nested_col.cols(), 1);
+        assert_eq!(*nested_col.get(1, 0), 5);
     }
 
     #[test]

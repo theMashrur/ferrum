@@ -77,6 +77,16 @@ macro_rules! impl_matrix_read_for_view {
                     col_stride: self.col_stride,
                 }
             }
+
+            fn col(&self, col: usize) -> ColView<'_, T> {
+                assert!(col < self.cols, "Column index out of bounds");
+                ColView {
+                    rows: self.rows,
+                    data: self.data,
+                    offset: self.offset + col * self.col_stride,
+                    row_stride: self.row_stride,
+                }
+            }
         }
     };
 }
@@ -163,6 +173,16 @@ impl<T> MatrixRead<T> for RowView<'_, T> {
             col_stride: self.col_stride,
         }
     }
+
+    fn col(&self, col: usize) -> ColView<'_, T> {
+        assert!(col < self.cols, "Column index out of bounds");
+        ColView {
+            rows: 1,
+            data: self.data,
+            offset: self.offset + col * self.col_stride,
+            row_stride: self.col_stride,
+        }
+    }
 }
 
 impl<T> MatrixRead<T> for RowViewMut<'_, T> {
@@ -189,6 +209,16 @@ impl<T> MatrixRead<T> for RowViewMut<'_, T> {
             data: self.data,
             offset: self.offset,
             col_stride: self.col_stride,
+        }
+    }
+
+    fn col(&self, col: usize) -> ColView<'_, T> {
+        assert!(col < self.cols, "Column index out of bounds");
+        ColView {
+            rows: 1,
+            data: self.data,
+            offset: self.offset + col * self.col_stride,
+            row_stride: self.col_stride,
         }
     }
 }
@@ -218,6 +248,16 @@ impl<T> MatrixRead<T> for ColView<'_, T> {
             data: self.data,
             offset: self.offset + row * self.row_stride,
             col_stride: self.row_stride,
+        }
+    }
+
+    fn col(&self, col: usize) -> ColView<'_, T> {
+        assert!(col < 1, "Column index out of bounds");
+        ColView {
+            rows: self.rows,
+            data: self.data,
+            offset: self.offset,
+            row_stride: self.row_stride,
         }
     }
 }
