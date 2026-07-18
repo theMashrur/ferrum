@@ -41,13 +41,19 @@ The project is structured as a high-performance core crate (Rust) plus a thin Py
 ferrum/
   Cargo.toml
   pyproject.toml
+  ferrum-core/
+    Cargo.toml
+    src/
+      lib.rs
+      algorithms/
+      core/
+      threading/
+  ferrum-py/
+    Cargo.toml
+    src/
+      lib.rs
+      bindings/
   python/ferrum/__init__.py
-  src/
-    lib.rs
-    algorithms/mod.rs
-    bindings/mod.rs
-    core/mod.rs
-    threading/mod.rs
   tests/python/test_import.py
 ```
 
@@ -57,7 +63,7 @@ Use a virtual environment and run the smallest validation loop first:
 
 ```powershell
 $env:PATH += ";$env:USERPROFILE\.cargo\bin"
-cargo check
+cargo check --workspace
 .\.venv\Scripts\maturin.exe develop
 .\.venv\Scripts\pytest.exe
 ```

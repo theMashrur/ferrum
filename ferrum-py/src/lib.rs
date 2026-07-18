@@ -1,7 +1,4 @@
-pub mod algorithms;
 pub mod bindings;
-pub mod core;
-pub mod threading;
 
 use pyo3::prelude::*;
 

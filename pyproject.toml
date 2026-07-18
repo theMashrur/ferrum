@@ -22,6 +22,7 @@ dev = [
 ]
 
 [tool.maturin]
+manifest-path = "ferrum-py/Cargo.toml"
 python-source = "python"
 module-name = "ferrum._ferrum"
 

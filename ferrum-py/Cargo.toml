@@ -1,0 +1,13 @@
+[package]
+name = "ferrum"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "ferrum"
+crate-type = ["cdylib"]
+
+[dependencies]
+ferrum-core = { path = "../ferrum-core" }
+pyo3 = { version = "0.24", features = ["extension-module", "abi3-py311"] }
