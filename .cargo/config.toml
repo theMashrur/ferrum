@@ -1,0 +1,10 @@
+[alias]
+# Host/Windows x64 validation for the full workspace.
+check-x86 = "check --workspace --target x86_64-pc-windows-msvc"
+
+# ARM64 validation from a non-ARM host (typecheck/compile validation).
+check-arm = "check --workspace --target aarch64-pc-windows-msvc"
+
+# Optional package-level shortcuts used often during kernel work.
+check-core-x86 = "check -p ferrum-core --target x86_64-pc-windows-msvc"
+check-core-arm = "check -p ferrum-core --target aarch64-pc-windows-msvc"

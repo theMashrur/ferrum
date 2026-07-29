@@ -1,7 +1,10 @@
+use std::any::TypeId;
 use std::cmp;
 use std::fmt;
 use std::ops;
 use std::ops::Range;
+
+use crate::algorithms::gemm::{basic_gemm_kernel, matmul_blocked, GemmBlocking};
 
 use super::views::{ColView, ColViewMut, MatrixView, MatrixViewMut, RowView, RowViewMut};
 
@@ -327,56 +330,6 @@ where
     }
 }
 
-pub fn gemm_kernel<A, B, C, T>(a: &A, b: &B, out: &mut C, alpha: Option<T>, beta: Option<T>)
-where
-    A: MatrixRead<T>,
-    B: MatrixRead<T>,
-    C: MatrixWrite<T>,
-    T: Copy
-        + ops::Add<Output = T>
-        + ops::Mul<Output = T>
-        + Default
-        + PartialEq
-        + From<f64>
-        + ops::AddAssign<T>
-        + ops::Sub<Output = T>,
-{
-    assert_eq!(
-        a.cols(),
-        b.rows(),
-        "Inner dimensions {} and {} must match for matrix multiplication",
-        a.cols(),
-        b.rows()
-    );
-    let m = a.rows();
-    let k_dim = a.cols();
-    let n = b.cols();
-    let beta = beta.unwrap_or(T::from(0.0));
-    let alpha = alpha.unwrap_or(T::from(1.0));
-
-    // beta scaling block: skip if beta is zero
-    if beta != T::from(1.0) {
-        for i in 0..m {
-            for j in 0..n {
-                out.accumulate(i, j, (beta - T::from(1.0)) * (*out.get(i, j)));
-            }
-        }
-    }
-
-    // Matrix Multiplication block: skip if alpha is zero
-    if alpha != T::from(0.0) {
-        for i in 0..m {
-            for k in 0..k_dim {
-                let a_ik = a.get(i, k);
-                for j in 0..n {
-                    let b_kj = b.get(k, j);
-                    out.accumulate(i, j, (*a_ik) * (*b_kj) * alpha);
-                }
-            }
-        }
-    }
-}
-
 impl<'a, 'b, T> ops::Mul<&'b Matrix<T>> for &'a Matrix<T>
 where
     T: Copy
@@ -386,7 +339,8 @@ where
         + PartialEq
         + From<f64>
         + ops::AddAssign<T>
-        + ops::Sub<Output = T>,
+        + ops::Sub<Output = T>
+        + 'static,
 {
     type Output = Matrix<T>;
 
@@ -396,7 +350,13 @@ where
             "Inner dimensions must match for matrix multiplication"
         );
         let mut out = Matrix::zeros(self.rows, rhs.cols);
-        gemm_kernel(self, rhs, &mut out, None, None);
+
+        if TypeId::of::<T>() == TypeId::of::<f64>() {
+            matmul_blocked(self, rhs, &mut out, None, None, GemmBlocking::default());
+        } else {
+            basic_gemm_kernel(self, rhs, &mut out, None, None);
+        }
+
         out
     }
 }
@@ -482,6 +442,7 @@ impl<T> Matrix<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::algorithms::gemm::{GemmBlocking, matmul_blocked};
 
     #[test]
     fn test_matrix_creation() {
@@ -607,12 +568,12 @@ mod tests {
     }
 
     #[test]
-    fn test_gemm_kernel_basic() {
+    fn test_basic_gemm_kernel_basic() {
         let a = Matrix::from_data(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let b = Matrix::from_data(3, 2, vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
         let mut out = Matrix::zeros(2, 2);
 
-        gemm_kernel(&a, &b, &mut out, None, None);
+        basic_gemm_kernel(&a, &b, &mut out, None, None);
 
         // Manual calculation: [[1*7 + 2*9 + 3*11, 1*8 + 2*10 + 3*12], [4*7 + 5*9 + 6*11, 4*8 + 5*10 + 6*12]]
         // = [[58, 64], [139, 154]]
@@ -623,12 +584,12 @@ mod tests {
     }
 
     #[test]
-    fn test_gemm_kernel_with_alpha() {
+    fn test_basic_gemm_kernel_with_alpha() {
         let a = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
         let b = Matrix::from_data(2, 2, vec![2.0, 0.0, 1.0, 2.0]);
         let mut out = Matrix::zeros(2, 2);
 
-        gemm_kernel(&a, &b, &mut out, Some(2.0), None);
+        basic_gemm_kernel(&a, &b, &mut out, Some(2.0), None);
 
         // Expected: 2 * (A * B) = 2 * [[4, 4], [10, 8]]
         assert_eq!(*out.get(0, 0), 8.0);
@@ -638,12 +599,12 @@ mod tests {
     }
 
     #[test]
-    fn test_gemm_kernel_with_beta() {
+    fn test_basic_gemm_kernel_with_beta() {
         let a = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
         let b = Matrix::from_data(2, 2, vec![2.0, 0.0, 1.0, 2.0]);
         let mut out = Matrix::from_data(2, 2, vec![1.0, 1.0, 1.0, 1.0]);
 
-        gemm_kernel(&a, &b, &mut out, None, Some(2.0));
+        basic_gemm_kernel(&a, &b, &mut out, None, Some(2.0));
 
         // Expected: beta * out + A * B = 2*out + A*B = [[6, 6], [12, 10]]
         assert_eq!(*out.get(0, 0), 6.0);
@@ -653,12 +614,12 @@ mod tests {
     }
 
     #[test]
-    fn test_gemm_kernel_with_alpha_and_beta() {
+    fn test_basic_gemm_kernel_with_alpha_and_beta() {
         let a = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
         let b = Matrix::from_data(2, 2, vec![2.0, 0.0, 1.0, 2.0]);
         let mut out = Matrix::from_data(2, 2, vec![1.0, 1.0, 1.0, 1.0]);
 
-        gemm_kernel(&a, &b, &mut out, Some(3.0), Some(2.0));
+        basic_gemm_kernel(&a, &b, &mut out, Some(3.0), Some(2.0));
 
         // Expected: beta * out + alpha * A * B = 2*out + 3*(A*B) = [[14, 14], [32, 26]]
         assert_eq!(*out.get(0, 0), 14.0);
@@ -668,18 +629,143 @@ mod tests {
     }
 
     #[test]
-    fn test_gemm_kernel_zero_alpha() {
+    fn test_basic_gemm_kernel_zero_alpha() {
         let a = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
         let b = Matrix::from_data(2, 2, vec![2.0, 0.0, 1.0, 2.0]);
         let mut out = Matrix::from_data(2, 2, vec![5.0, 5.0, 5.0, 5.0]);
 
-        gemm_kernel(&a, &b, &mut out, Some(0.0), Some(2.0));
+        basic_gemm_kernel(&a, &b, &mut out, Some(0.0), Some(2.0));
 
         // Expected: only beta scaling, so 2*out
         assert_eq!(*out.get(0, 0), 10.0);
         assert_eq!(*out.get(0, 1), 10.0);
         assert_eq!(*out.get(1, 0), 10.0);
         assert_eq!(*out.get(1, 1), 10.0);
+    }
+
+    #[test]
+    fn test_matmul_blocked_basic() {
+        let a = Matrix::from_data(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let b = Matrix::from_data(3, 2, vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
+        let mut out = Matrix::zeros(2, 2);
+
+        matmul_blocked(&a, &b, &mut out, None, None, GemmBlocking::default());
+
+        assert_eq!(*out.get(0, 0), 58.0);
+        assert_eq!(*out.get(0, 1), 64.0);
+        assert_eq!(*out.get(1, 0), 139.0);
+        assert_eq!(*out.get(1, 1), 154.0);
+    }
+
+    #[test]
+    fn test_matmul_blocked_with_alpha() {
+        let a = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+        let b = Matrix::from_data(2, 2, vec![2.0, 0.0, 1.0, 2.0]);
+        let mut out = Matrix::zeros(2, 2);
+
+        matmul_blocked(&a, &b, &mut out, Some(2.0), None, GemmBlocking::default());
+
+        assert_eq!(*out.get(0, 0), 8.0);
+        assert_eq!(*out.get(0, 1), 8.0);
+        assert_eq!(*out.get(1, 0), 20.0);
+        assert_eq!(*out.get(1, 1), 16.0);
+    }
+
+    #[test]
+    fn test_matmul_blocked_with_beta() {
+        let a = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+        let b = Matrix::from_data(2, 2, vec![2.0, 0.0, 1.0, 2.0]);
+        let mut out = Matrix::from_data(2, 2, vec![1.0, 1.0, 1.0, 1.0]);
+
+        matmul_blocked(&a, &b, &mut out, None, Some(2.0), GemmBlocking::default());
+
+        assert_eq!(*out.get(0, 0), 6.0);
+        assert_eq!(*out.get(0, 1), 6.0);
+        assert_eq!(*out.get(1, 0), 12.0);
+        assert_eq!(*out.get(1, 1), 10.0);
+    }
+
+    #[test]
+    fn test_matmul_blocked_with_alpha_and_beta() {
+        let a = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+        let b = Matrix::from_data(2, 2, vec![2.0, 0.0, 1.0, 2.0]);
+        let mut out = Matrix::from_data(2, 2, vec![1.0, 1.0, 1.0, 1.0]);
+
+        matmul_blocked(
+            &a,
+            &b,
+            &mut out,
+            Some(3.0),
+            Some(2.0),
+            GemmBlocking::default(),
+        );
+
+        assert_eq!(*out.get(0, 0), 14.0);
+        assert_eq!(*out.get(0, 1), 14.0);
+        assert_eq!(*out.get(1, 0), 32.0);
+        assert_eq!(*out.get(1, 1), 26.0);
+    }
+
+    #[test]
+    fn test_matmul_blocked_zero_alpha() {
+        let a = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+        let b = Matrix::from_data(2, 2, vec![2.0, 0.0, 1.0, 2.0]);
+        let mut out = Matrix::from_data(2, 2, vec![5.0, 5.0, 5.0, 5.0]);
+
+        matmul_blocked(
+            &a,
+            &b,
+            &mut out,
+            Some(0.0),
+            Some(2.0),
+            GemmBlocking::default(),
+        );
+
+        assert_eq!(*out.get(0, 0), 10.0);
+        assert_eq!(*out.get(0, 1), 10.0);
+        assert_eq!(*out.get(1, 0), 10.0);
+        assert_eq!(*out.get(1, 1), 10.0);
+    }
+
+    #[test]
+    fn test_matmul_blocked_full_4x4_tile() {
+        let a = Matrix::from_data(
+            4,
+            4,
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0,
+                16.0,
+            ],
+        );
+        let b = Matrix::from_data(
+            4,
+            4,
+            vec![
+                1.0, 0.0, 2.0, 1.0, 0.0, 1.0, 3.0, 2.0, 1.0, 2.0, 0.0, 3.0, 4.0, 1.0, 2.0, 0.0,
+            ],
+        );
+        let mut out_blocked = Matrix::zeros(4, 4);
+        let mut out_basic = Matrix::zeros(4, 4);
+
+        matmul_blocked(
+            &a,
+            &b,
+            &mut out_blocked,
+            None,
+            None,
+            GemmBlocking {
+                mc: 4,
+                kc: 4,
+                nc: 4,
+            },
+        );
+        basic_gemm_kernel(&a, &b, &mut out_basic, None, None);
+
+        for i in 0..4 {
+            for j in 0..4 {
+                assert_eq!(*out_blocked.get(i, j), *out_basic.get(i, j));
+            }
+        }
     }
 
     #[test]

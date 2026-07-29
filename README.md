@@ -68,6 +68,21 @@ cargo check --workspace
 .\.venv\Scripts\pytest.exe
 ```
 
+For dual-target development on a non-ARM Windows machine, add ARM64 support once:
+
+```powershell
+rustup target add aarch64-pc-windows-msvc
+```
+
+Then use the workspace aliases in `.cargo/config.toml`:
+
+```powershell
+cargo check-x86
+cargo check-arm
+cargo check-core-x86
+cargo check-core-arm
+```
+
 ## Architecture notes
 
 `ferrum` treats the Python/Rust boundary as orchestration code. Numerical kernels should operate over Rust-native data structures, and Python object interaction should remain localized at API edges. This supports predictable performance and safer multithreading behavior.
