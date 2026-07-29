@@ -239,6 +239,7 @@ impl<T> Matrix<T> {
 
 // ---------- Arithmetic Operations ----------
 
+#[inline(always)]
 pub fn add_core<T>(lhs: &Matrix<T>, rhs: &Matrix<T>, out: &mut Matrix<T>)
 where
     T: Copy + ops::Add<Output = T>,
@@ -268,6 +269,7 @@ where
     }
 }
 
+#[inline(always)]
 pub fn sub_core<T>(lhs: &Matrix<T>, rhs: &Matrix<T>, out: &mut Matrix<T>)
 where
     T: Copy + ops::Sub<Output = T>,
@@ -297,6 +299,7 @@ where
     }
 }
 
+#[inline(always)]
 pub fn scalar_mul_core<T>(matrix: &Matrix<T>, scalar: T, out: &mut Matrix<T>)
 where
     T: Copy + ops::Mul<Output = T>,
