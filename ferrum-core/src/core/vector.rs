@@ -61,9 +61,11 @@ impl<T> VectorRead<T> for Vector<T> {
 }
 
 impl<T> Vector<T> {
-    pub fn new(size: usize) -> Self {
-        let data = Vec::with_capacity(size);
-        Vector { data, size }
+    pub fn new(size: usize) -> Self
+    where
+        T: Default + Copy,
+    {
+        Self::zeros(size)
     }
 
     pub fn dot(&self, other: &Vector<T>) -> T
@@ -81,6 +83,16 @@ impl<T> Vector<T> {
         }
         result
     }
+
+    pub fn zeros(size: usize) -> Self
+    where
+        T: Default + Copy,
+    {
+        Vector {
+            data: vec![T::default(); size],
+            size: size,
+        }
+    }
 }
 
 // --------------- Arithmetic Operations ----------------
@@ -95,18 +107,14 @@ where
         out.size(),
         "Output vector must be of the same size as input vectors"
     );
-
-    out.data.clear();
-    out.data.reserve(lhs.size());
-
     for i in 0..lhs.size() {
-        out.data.push(lhs.data[i] + rhs.data[i]);
+        out.data[i] = lhs.data[i] + rhs.data[i];
     }
 }
 
 impl<'a, 'b, T> ops::Add<&'b Vector<T>> for &'a Vector<T>
 where
-    T: ops::Add<Output = T> + Copy,
+    T: ops::Add<Output = T> + Copy + Default,
 {
     type Output = Vector<T>;
 
@@ -129,17 +137,14 @@ where
         "Output vector must be of the same size as input vectors"
     );
 
-    out.data.clear();
-    out.data.reserve(lhs.size());
-
     for i in 0..lhs.size() {
-        out.data.push(lhs.data[i] - rhs.data[i]);
+        out.data[i] = lhs.data[i] - rhs.data[i];
     }
 }
 
 impl<'a, 'b, T> ops::Sub<&'b Vector<T>> for &'a Vector<T>
 where
-    T: ops::Sub<Output = T> + Copy,
+    T: ops::Sub<Output = T> + Copy + Default,
 {
     type Output = Vector<T>;
 
@@ -155,17 +160,14 @@ pub fn scalar_mul_vectors_core<T>(vector: &Vector<T>, scalar: T, out: &mut Vecto
 where
     T: ops::Mul<Output = T> + Copy,
 {
-    out.data.clear();
-    out.data.reserve(vector.size());
-
     for i in 0..vector.size() {
-        out.data.push(vector.data[i] * scalar);
+        out.data[i] = vector.data[i] * scalar;
     }
 }
 
 impl<'a, T> ops::Mul<T> for &'a Vector<T>
 where
-    T: ops::Mul<Output = T> + Copy,
+    T: ops::Mul<Output = T> + Copy + Default,
 {
     type Output = Vector<T>;
 
