@@ -4,7 +4,7 @@ use std::fmt;
 use std::ops;
 use std::ops::Range;
 
-use crate::algorithms::gemm::{basic_gemm_kernel, matmul_blocked, GemmBlocking};
+use crate::algorithms::gemm::{GemmBlocking, basic_gemm_kernel, matmul_blocked};
 
 use super::views::{ColView, ColViewMut, MatrixView, MatrixViewMut, RowView, RowViewMut};
 
@@ -191,20 +191,6 @@ impl<T> Matrix<T> {
 
 // ---------- Utilities (Real Matrices) ----------
 
-impl Matrix<f64> {
-    pub fn identity(size: usize) -> Self {
-        let mut data = Self::zeros(size, size).data;
-        for i in 0..size {
-            data[i * size + i] = 1.0;
-        }
-        Matrix {
-            rows: size,
-            cols: size,
-            data,
-        }
-    }
-}
-
 // ---------- Utilities (All Matrices) ----------
 
 impl<T> Matrix<T> {
@@ -236,6 +222,21 @@ impl<T> Matrix<T> {
             rows: self.cols,
             cols: self.rows,
             data: transposed_data,
+        }
+    }
+
+    pub fn identity(size: usize) -> Self
+    where
+        T: From<f64> + Copy,
+    {
+        let mut data = Self::zeros(size, size).data;
+        for i in 0..size {
+            data[i * size + i] = T::from(1.0);
+        }
+        Matrix {
+            rows: size,
+            cols: size,
+            data,
         }
     }
 }

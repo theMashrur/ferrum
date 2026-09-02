@@ -642,6 +642,9 @@ pub fn matmul_blocked<A, B, C, T>(
         + ops::Sub<Output = T>
         + 'static,
 {
+    // The blocked kernels in this file assume a dense f64 payload. Keep the
+    // generic path correct for all element types and let the fast path handle
+    // the f64 specialization only.
     assert_eq!(
         a.cols(),
         b.rows(),
@@ -673,14 +676,20 @@ pub fn matmul_blocked<A, B, C, T>(
         return;
     }
 
+    // Cast the generic alpha/beta values into the concrete f64 representation
+    // used by the SIMD kernels.
     let alpha_f64 = unsafe { *(&alpha as *const T as *const f64) };
     let beta_f64 = unsafe { *(&beta as *const T as *const f64) };
 
+    // Select the best available microkernel for the current platform and
+    // normalize the blocking sizes to integer multiples of the kernel tile.
     let kernel = gemm_microkernel_dispatcher();
-
     let mc = (blocking.mc / kernel.mr).max(1) * kernel.mr;
     let kc = blocking.kc.min(kernel.kc).max(1);
     let nc = (blocking.nc / kernel.nr).max(1) * kernel.nr;
+
+    // Reused scratch space for packed panels. These buffers are repurposed as we
+    // traverse the K and J panels so we avoid repeated per-tile heap traffic.
     let mut a_pack = Vec::new();
     let mut b_packs = Vec::new();
 
@@ -689,6 +698,10 @@ pub fn matmul_blocked<A, B, C, T>(
         unsafe { *(v as *const T as *const f64) }
     };
 
+    // Outer loops over the output columns and the K dimension. The idea is to
+    // tile the multiplication into manageable blocks, pack A/B for each panel,
+    // and then invoke the microkernel on each row block. This keeps the work
+    // cache-friendly while preserving the correct matrix semantics.
     for jc in (0..n).step_by(nc) {
         let j_end = (jc + nc).min(n);
 
@@ -697,14 +710,18 @@ pub fn matmul_blocked<A, B, C, T>(
             let k_panel = p_end - pc;
             let beta_panel = if pc == 0 { beta_f64 } else { 1.0 };
 
-            // Reuse packing buffers within this k-panel to avoid per-tile allocations.
+            // Pack the current A panel and the full B tiles for this J panel. We
+            // reuse these packed buffers across all row tiles so the microkernel sees
+            // contiguous memory and the overhead remains low.
             a_pack.resize(kernel.mr * k_panel, 0.0);
             let b_pack_stride = kernel.nr * k_panel;
             let full_j_tiles = (j_end - jc) / kernel.nr;
             let full_j_end = jc + full_j_tiles * kernel.nr;
             b_packs.resize(full_j_tiles * b_pack_stride, 0.0);
 
-            // Pack each full NR tile of B once and reuse across all i-tiles.
+            // Pack each full NR tile of B once and reuse it for every row tile in
+            // this K-panel. This is the classic blocking optimization: amortize the
+            // packing cost across many microkernel calls.
             for tile_idx in 0..full_j_tiles {
                 let j0 = jc + tile_idx * kernel.nr;
                 let b_base = tile_idx * b_pack_stride;
@@ -715,18 +732,26 @@ pub fn matmul_blocked<A, B, C, T>(
                 }
             }
 
+            // Row-wise blocked loop. Each iteration processes a slice of rows whose
+            // height matches the microkernel's MR dimension.
             for ic in (0..m).step_by(mc) {
                 let i_end = (ic + mc).min(m);
                 let mut c_tile = [0.0f64; MAX_F64_KERNEL_TILE];
 
                 let mut i0 = ic;
                 while i0 + kernel.mr <= i_end {
+                    // Pack the corresponding A rows for this K-panel into a dense
+                    // contiguous layout expected by the microkernel.
                     for p in 0..k_panel {
                         for ii in 0..kernel.mr {
                             a_pack[p * kernel.mr + ii] = to_f64(a.get(i0 + ii, pc + p));
                         }
                     }
 
+                    // For each full B tile in the current J panel, load the existing
+                    // output values into the scratch tile, invoke the microkernel, and
+                    // write the result back. The microkernel handles the accumulation
+                    // and beta scaling in a compact SIMD-friendly layout.
                     for tile_idx in 0..full_j_tiles {
                         let j0 = jc + tile_idx * kernel.nr;
                         let b_ptr = unsafe { b_packs.as_ptr().add(tile_idx * b_pack_stride) };
@@ -758,6 +783,9 @@ pub fn matmul_blocked<A, B, C, T>(
                         }
                     }
 
+                    // Tail columns that do not align to a full NR tile are handled in
+                    // a scalar fallback, preserving correctness without needing a
+                    // specialized microkernel for every ragged remainder.
                     if full_j_end < j_end {
                         for i in i0..(i0 + kernel.mr) {
                             for j in full_j_end..j_end {
@@ -780,6 +808,8 @@ pub fn matmul_blocked<A, B, C, T>(
                     i0 += kernel.mr;
                 }
 
+                // Any remaining rows in this block that do not fill a whole MR tile
+                // are also reduced to a scalar path so the loop terminates correctly.
                 if i0 < i_end {
                     for i in i0..i_end {
                         for j in jc..j_end {
