@@ -37,6 +37,20 @@ pub trait MatrixWrite<T>: MatrixRead<T> {
         *elem += value;
     }
 
+    /// Overwrites every element with the corresponding element of `src` (same shape required).
+    fn copy_from<S: MatrixRead<T>>(&mut self, src: &S)
+    where
+        T: Copy,
+    {
+        assert_eq!(self.rows(), src.rows(), "Shape mismatch in copy_from");
+        assert_eq!(self.cols(), src.cols(), "Shape mismatch in copy_from");
+        for i in 0..self.rows() {
+            for j in 0..self.cols() {
+                *self.get_mut(i, j) = *src.get(i, j);
+            }
+        }
+    }
+
     fn row_mut(&mut self, row: usize) -> RowViewMut<'_, T>;
     fn col_mut(&mut self, col: usize) -> ColViewMut<'_, T>;
 }
@@ -396,46 +410,6 @@ impl<T> Matrix<T> {
             col_stride: 1,
         }
     }
-
-    pub fn row_view(&self, row: usize) -> RowView<'_, T> {
-        assert!(row < self.rows);
-        RowView {
-            cols: self.cols,
-            data: &self.data,
-            offset: row * self.cols,
-            col_stride: 1,
-        }
-    }
-
-    pub fn row_view_mut(&mut self, row: usize) -> RowViewMut<'_, T> {
-        assert!(row < self.rows);
-        RowViewMut {
-            cols: self.cols,
-            data: &mut self.data,
-            offset: row * self.cols,
-            col_stride: 1,
-        }
-    }
-
-    pub fn col_view(&self, col: usize) -> ColView<'_, T> {
-        assert!(col < self.cols);
-        ColView {
-            rows: self.rows,
-            data: &self.data,
-            offset: col,
-            row_stride: self.cols,
-        }
-    }
-
-    pub fn col_view_mut(&mut self, col: usize) -> ColViewMut<'_, T> {
-        assert!(col < self.cols);
-        ColViewMut {
-            rows: self.rows,
-            data: &mut self.data,
-            offset: col,
-            row_stride: self.cols,
-        }
-    }
 }
 
 // ---------- Unit Tests ----------
@@ -504,7 +478,7 @@ mod tests {
     #[test]
     fn test_matrix_row_view() {
         let m = Matrix::from_data(3, 3, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
-        let row_view = m.row_view(1);
+        let row_view = m.row(1);
         assert_eq!(row_view.cols, 3);
         assert_eq!(*row_view.get(0, 0), 4);
         assert_eq!(*row_view.get(0, 2), 6);
@@ -513,10 +487,30 @@ mod tests {
     #[test]
     fn test_matrix_col_view() {
         let m = Matrix::from_data(3, 3, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
-        let col_view = m.col_view(1);
+        let col_view = m.col(1);
         assert_eq!(col_view.rows, 3);
         assert_eq!(*col_view.get(0, 0), 2);
         assert_eq!(*col_view.get(2, 0), 8);
+    }
+
+    #[test]
+    fn test_matrix_row_mut_writes_through() {
+        let mut m = Matrix::from_data(2, 2, vec![1, 2, 3, 4]);
+        {
+            let mut row = m.row_mut(0);
+            *row.get_mut(0, 1) = 9;
+        }
+        assert_eq!(*m.get(0, 1), 9);
+    }
+
+    #[test]
+    fn test_matrix_col_mut_writes_through() {
+        let mut m = Matrix::from_data(2, 2, vec![1, 2, 3, 4]);
+        {
+            let mut col = m.col_mut(1);
+            *col.get_mut(1, 0) = 9;
+        }
+        assert_eq!(*m.get(1, 1), 9);
     }
 
     #[test]
