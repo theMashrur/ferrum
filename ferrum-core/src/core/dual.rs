@@ -58,6 +58,13 @@ impl ops::Sub<Dual> for Dual {
     }
 }
 
+impl ops::SubAssign<Dual> for Dual {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.real -= rhs.real;
+        self.dual -= rhs.dual;
+    }
+}
+
 impl ops::Mul<Dual> for Dual {
     type Output = Self;
 
@@ -65,6 +72,21 @@ impl ops::Mul<Dual> for Dual {
         Dual {
             real: self.real * rhs.real,
             dual: self.real * rhs.dual + self.dual * rhs.real,
+        }
+    }
+}
+
+impl ops::Div<Dual> for Dual {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self {
+        assert_ne!(
+            rhs.real, 0.0,
+            "Real component for the right operand in dual division must be non-zero!"
+        );
+        Dual {
+            real: self.real / rhs.real,
+            dual: (self.dual * rhs.real - self.real * rhs.dual) / rhs.real.powf(2.0),
         }
     }
 }
@@ -271,6 +293,26 @@ mod tests {
                 real: 8.0,
                 dual: 22.0
             }
+        );
+    }
+
+    #[test]
+    fn test_division() {
+        let a = Dual {
+            real: 5.0,
+            dual: 7.0,
+        };
+        let b = Dual {
+            real: 2.0,
+            dual: 3.0,
+        };
+
+        assert_dual_close(
+            a / b,
+            Dual {
+                real: 2.5,
+                dual: -0.25,
+            },
         );
     }
 

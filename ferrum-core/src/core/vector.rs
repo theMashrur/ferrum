@@ -1,3 +1,4 @@
+use super::elementary_functions::*;
 use std::fmt;
 use std::ops;
 
@@ -84,6 +85,18 @@ impl<T> Vector<T> {
         result
     }
 
+    pub fn norm(&self) -> T
+    where
+        T: ElementaryFunctions + Copy + From<f64> + ops::AddAssign,
+    {
+        let mut result = T::from(0.0);
+        for i in 0..self.size() {
+            result += self.data[i].powf(2.0);
+        }
+        result = sqrt(result);
+        result
+    }
+
     pub fn zeros(size: usize) -> Self
     where
         T: Default + Copy,
@@ -97,6 +110,7 @@ impl<T> Vector<T> {
 
 // --------------- Arithmetic Operations ----------------
 
+#[inline(always)]
 pub fn add_vectors_core<T>(lhs: &Vector<T>, rhs: &Vector<T>, out: &mut Vector<T>)
 where
     T: ops::Add<Output = T> + Copy,
@@ -126,6 +140,7 @@ where
     }
 }
 
+#[inline(always)]
 pub fn sub_vectors_core<T>(lhs: &Vector<T>, rhs: &Vector<T>, out: &mut Vector<T>)
 where
     T: ops::Sub<Output = T> + Copy,
@@ -156,12 +171,23 @@ where
     }
 }
 
+#[inline(always)]
 pub fn scalar_mul_vectors_core<T>(vector: &Vector<T>, scalar: T, out: &mut Vector<T>)
 where
     T: ops::Mul<Output = T> + Copy,
 {
     for i in 0..vector.size() {
         out.data[i] = vector.data[i] * scalar;
+    }
+}
+
+#[inline(always)]
+pub fn scalar_div_vectors_core<T>(vector: &Vector<T>, scalar: T, out: &mut Vector<T>)
+where
+    T: ops::Div<Output = T> + Copy,
+{
+    for i in 0..vector.size() {
+        out.data[i] = vector.data[i] / scalar;
     }
 }
 
@@ -174,6 +200,19 @@ where
     fn mul(self, scalar: T) -> Vector<T> {
         let mut result = Vector::new(self.size());
         scalar_mul_vectors_core(self, scalar, &mut result);
+        result
+    }
+}
+
+impl<'a, T> ops::Div<T> for &'a Vector<T>
+where
+    T: Copy + Default + ops::Div<Output = T>,
+{
+    type Output = Vector<T>;
+
+    fn div(self, scalar: T) -> Vector<T> {
+        let mut result = Vector::new(self.size());
+        scalar_div_vectors_core(self, scalar, &mut result);
         result
     }
 }
@@ -221,6 +260,16 @@ mod tests {
         let scalar = 2;
         let result = &v * scalar;
         assert_eq!(result.data, vec![2, 4, 6]);
+    }
+
+    #[test]
+    fn test_scalar_division() {
+        let v = Vector {
+            data: vec![2.0, 4.0, 6.0],
+            size: 3,
+        };
+        let result = &v / 2.0;
+        assert_eq!(result.data, vec![1.0, 2.0, 3.0]);
     }
 
     #[test]

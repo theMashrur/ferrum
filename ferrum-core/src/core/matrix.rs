@@ -332,6 +332,21 @@ where
     }
 }
 
+#[inline(always)]
+pub fn scalar_div_core<T>(matrix: &Matrix<T>, scalar: T, out: &mut Matrix<T>)
+where
+    T: Copy + ops::Div<Output = T>,
+{
+    assert_eq!(matrix.rows, out.rows);
+    assert_eq!(matrix.cols, out.cols);
+
+    for i in 0..matrix.rows {
+        for j in 0..matrix.cols {
+            out.data[i * matrix.cols + j] = matrix.data[i * matrix.cols + j] / scalar;
+        }
+    }
+}
+
 impl<'a, T> ops::Mul<T> for &'a Matrix<T>
 where
     T: Copy + ops::Mul<Output = T> + From<f64>,
@@ -341,6 +356,19 @@ where
     fn mul(self, rhs: T) -> Matrix<T> {
         let mut out = Matrix::new(self.rows, self.cols);
         scalar_mul_core(self, rhs, &mut out);
+        out
+    }
+}
+
+impl<'a, T> ops::Div<T> for &'a Matrix<T>
+where
+    T: Copy + ops::Mul<Output = T> + From<f64> + ops::Div<Output = T>,
+{
+    type Output = Matrix<T>;
+
+    fn div(self, rhs: T) -> Matrix<T> {
+        let mut out = Matrix::new(self.rows, self.cols);
+        scalar_div_core(self, rhs, &mut out);
         out
     }
 }
@@ -448,6 +476,13 @@ mod tests {
         let m = Matrix::from_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
         let m_scaled = &m * 2.0;
         assert_eq!(m_scaled.data, vec![2.0, 4.0, 6.0, 8.0]);
+    }
+
+    #[test]
+    fn test_matrix_scalar_division() {
+        let m = Matrix::from_data(2, 2, vec![2.0, 4.0, 6.0, 8.0]);
+        let m_scaled = &m / 2.0;
+        assert_eq!(m_scaled.data, vec![1.0, 2.0, 3.0, 4.0]);
     }
 
     #[test]

@@ -47,6 +47,13 @@ impl ops::Sub<Complex> for Complex {
     }
 }
 
+impl ops::SubAssign<Complex> for Complex {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.real -= rhs.real;
+        self.imag -= rhs.imag;
+    }
+}
+
 impl ops::Add<f64> for Complex {
     type Output = Self;
 
@@ -76,6 +83,18 @@ impl ops::Mul<Complex> for Complex {
         Complex {
             real: self.real * rhs.real - self.imag * rhs.imag,
             imag: self.real * rhs.imag + self.imag * rhs.real,
+        }
+    }
+}
+
+impl ops::Div<Complex> for Complex {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self {
+        let divisor = rhs.real.powf(2.0) + rhs.imag.powf(2.0);
+        Complex {
+            real: (self.real * rhs.real + self.imag * rhs.imag) / divisor,
+            imag: (self.imag * rhs.real - self.real * rhs.imag) / divisor,
         }
     }
 }
@@ -178,6 +197,13 @@ impl ElementaryFunctions for Complex {
 mod tests {
     use super::*;
 
+    const EPSILON: f64 = 1e-12;
+
+    fn assert_complex_close(actual: Complex, expected: Complex) {
+        assert!((actual.real - expected.real).abs() <= EPSILON);
+        assert!((actual.imag - expected.imag).abs() <= EPSILON);
+    }
+
     #[test]
     fn test_add() {
         let a = Complex {
@@ -253,6 +279,26 @@ mod tests {
                 real: -5.0,
                 imag: 10.0
             }
+        );
+    }
+
+    #[test]
+    fn test_div() {
+        let a = Complex {
+            real: 1.0,
+            imag: 2.0,
+        };
+        let b = Complex {
+            real: 3.0,
+            imag: 4.0,
+        };
+
+        assert_complex_close(
+            a / b,
+            Complex {
+                real: 0.44,
+                imag: 0.08,
+            },
         );
     }
 
