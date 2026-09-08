@@ -27,6 +27,12 @@ impl From<f64> for Dual {
     }
 }
 
+impl std::iter::Sum<Dual> for Dual {
+    fn sum<I: Iterator<Item = Dual>>(iter: I) -> Self {
+        iter.fold(Dual::from(0.0), ops::Add::add)
+    }
+}
+
 // ----------------- Arithmetic ---------------------
 
 impl ops::Add<Dual> for Dual {

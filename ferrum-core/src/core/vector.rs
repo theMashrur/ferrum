@@ -1,6 +1,9 @@
-use super::elementary_functions::*;
 use std::fmt;
 use std::ops;
+
+use super::elementary_functions::*;
+use super::matrix::*;
+use super::views::*;
 
 #[derive(Debug, Clone)]
 pub struct Vector<T> {
@@ -50,6 +53,33 @@ pub trait VectorRead<T> {
     fn get(&self, index: usize) -> &T;
 }
 
+pub trait VectorWrite<T> {
+    fn set(&mut self, index: usize, value: T);
+
+    fn set_range(&mut self, start: usize, end: usize, value: &Vec<T>);
+}
+
+impl<T> VectorWrite<T> for Vector<T>
+where
+    T: Copy,
+{
+    fn set(&mut self, index: usize, value: T) {
+        assert!(index < self.size, "Index out of bounds");
+        self.data[index] = value;
+    }
+
+    fn set_range(&mut self, start: usize, end: usize, value: &Vec<T>) {
+        assert!(start <= end && end <= self.size, "Index out of bounds");
+        assert!(
+            value.len() == end - start,
+            "Value length must match the range"
+        );
+        for i in 0..value.len() {
+            self.data[start + i] = value[i];
+        }
+    }
+}
+
 impl<T> VectorRead<T> for Vector<T> {
     fn size(&self) -> usize {
         self.size
@@ -69,6 +99,18 @@ impl<T> Vector<T> {
         Self::zeros(size)
     }
 
+    #[inline]
+    pub fn apply<F>(&self, f: F) -> Vector<T>
+    where
+        F: Fn(T) -> T,
+        T: Copy,
+    {
+        Vector {
+            data: self.data.iter().map(|&x| f(x)).collect(),
+            size: self.size,
+        }
+    }
+
     pub fn dot(&self, other: &Vector<T>) -> T
     where
         T: ops::Mul<Output = T> + ops::Add<Output = T> + Copy,
@@ -85,16 +127,36 @@ impl<T> Vector<T> {
         result
     }
 
+    #[inline(always)]
     pub fn norm(&self) -> T
     where
-        T: ElementaryFunctions + Copy + From<f64> + ops::AddAssign,
+        T: ops::Mul<Output = T> + ElementaryFunctions + std::iter::Sum<T>,
     {
-        let mut result = T::from(0.0);
-        for i in 0..self.size() {
-            result += self.data[i].powf(2.0);
+        self.data.iter().map(|x| *x * *x).sum::<T>().sqrt()
+    }
+
+    pub fn as_matrix(&self) -> MatrixView<T> {
+        MatrixView {
+            data: &self.data,
+            rows: self.size,
+            col_stride: self.size,
+            row_stride: 1,
+            offset: 0,
+            cols: 1,
         }
-        result = sqrt(result);
-        result
+    }
+
+    pub fn outer(&self, other: &Vector<T>) -> Matrix<T>
+    where
+        T: ops::Mul<Output = T> + Copy + From<f64>,
+    {
+        let mut data = Vec::with_capacity(self.size() * other.size());
+        for i in 0..self.size() {
+            for j in 0..other.size() {
+                data.push(self.data[i] * other.data[j]);
+            }
+        }
+        Matrix::from_data(self.size(), other.size(), data)
     }
 
     pub fn zeros(size: usize) -> Self
@@ -284,5 +346,28 @@ mod tests {
         };
         let result = v1.dot(&v2);
         assert_eq!(result, 32); // 1*4 + 2*5 + 3*6 = 32
+    }
+
+    #[test]
+    fn test_apply() {
+        let vector = Vector {
+            data: vec![1, 2, 3],
+            size: 3,
+        };
+
+        let result = vector.apply(|value| value * 2);
+
+        assert_eq!(result.data, vec![2, 4, 6]);
+        assert_eq!(result.size, 3);
+    }
+
+    #[test]
+    fn test_norm() {
+        let vector: Vector<f64> = Vector {
+            data: vec![3.0, 4.0],
+            size: 2,
+        };
+
+        assert_eq!(vector.norm(), 5.0);
     }
 }

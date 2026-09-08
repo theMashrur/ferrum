@@ -4,6 +4,7 @@ pub mod complex;
 pub mod dual;
 pub mod elementary_functions;
 pub mod matrix;
+pub mod real;
 pub mod vector;
 pub mod views;
 

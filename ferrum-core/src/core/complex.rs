@@ -119,6 +119,12 @@ impl From<f64> for Complex {
     }
 }
 
+impl std::iter::Sum<Complex> for Complex {
+    fn sum<I: Iterator<Item = Complex>>(iter: I) -> Self {
+        iter.fold(Complex::from(0.0), ops::Add::add)
+    }
+}
+
 impl ElementaryFunctions for Complex {
     fn exp(self) -> Self {
         let exp_real = self.real.exp();
