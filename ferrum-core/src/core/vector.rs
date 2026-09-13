@@ -53,15 +53,19 @@ pub trait VectorRead<T> {
     fn get(&self, index: usize) -> &T;
 }
 
-pub trait VectorWrite<T> {
+pub trait VectorWrite<T>: VectorRead<T> {
     fn set(&mut self, index: usize, value: T);
 
     fn set_range(&mut self, start: usize, end: usize, value: &Vec<T>);
+
+    fn accumulate(&mut self, index: usize, value: T);
+
+    fn get_mut(&mut self, index: usize) -> &mut T;
 }
 
 impl<T> VectorWrite<T> for Vector<T>
 where
-    T: Copy,
+    T: Copy + ops::AddAssign,
 {
     fn set(&mut self, index: usize, value: T) {
         assert!(index < self.size, "Index out of bounds");
@@ -77,6 +81,15 @@ where
         for i in 0..value.len() {
             self.data[start + i] = value[i];
         }
+    }
+
+    fn get_mut(&mut self, index: usize) -> &mut T {
+        &mut self.data[index]
+    }
+
+    fn accumulate(&mut self, index: usize, value: T) {
+        let elem = self.get_mut(index);
+        *elem += value;
     }
 }
 

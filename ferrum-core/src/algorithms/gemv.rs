@@ -28,4 +28,27 @@ where
         a.cols(),
         b.size()
     );
+
+    let m = a.rows();
+    let k_dim = b.size();
+    let beta = beta.unwrap_or(T::from(0.0));
+    let alpha = alpha.unwrap_or(T::from(1.0));
+
+    // beta scaling block: skip if zero
+    if beta != T::from(1.0) {
+        for i in 0..k_dim {
+            out.accumulate(i, (beta - T::from(1.0)) * (*out.get(i)));
+        }
+    }
+
+    // Matvec Multiplication block: skip if zero
+    if alpha != T::from(0.0) {
+        for i in 0..m {
+            let mut sum = T::default();
+            for j in 0..k_dim {
+                sum += *a.get(i, j) * (*b.get(j));
+            }
+            out.accumulate(i, alpha * sum);
+        }
+    }
 }
