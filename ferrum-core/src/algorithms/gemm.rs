@@ -27,6 +27,17 @@ struct GemmMicrokernel {
     func: GemmMicrokernelFn,
 }
 
+macro_rules! gemm_kernel {
+    ($mr:expr, $nr:expr, $kc:expr, $func:path) => {
+        GemmMicrokernel {
+            mr: $mr,
+            nr: $nr,
+            kc: $kc,
+            func: $func,
+        }
+    };
+}
+
 impl GemmMicrokernel {
     unsafe fn run(
         &self,
@@ -407,41 +418,13 @@ unsafe fn gemm_microkernel_f64_4x4_scalar(
     }
 }
 
-#[cfg(target_arch = "x86_64")]
-unsafe fn call_gemm_microkernel_f64_4x4_x86_64(
-    k: usize,
-    alpha: f64,
-    a: *const f64,
-    b: *const f64,
-    beta: f64,
-    c: *mut f64,
-    rs_c: usize,
-    cs_c: usize,
-) {
-    unsafe { gemm_microkernel_f64_4x4_x86_64(k, alpha, a, b, beta, c, rs_c, cs_c) }
-}
-
-#[cfg(target_arch = "aarch64")]
-unsafe fn call_gemm_microkernel_f64_4x4_aarch64(
-    k: usize,
-    alpha: f64,
-    a: *const f64,
-    b: *const f64,
-    beta: f64,
-    c: *mut f64,
-    rs_c: usize,
-    cs_c: usize,
-) {
-    unsafe { gemm_microkernel_f64_4x4_aarch64(k, alpha, a, b, beta, c, rs_c, cs_c) }
-}
-
 fn scalar_4x4_kernel() -> GemmMicrokernel {
-    GemmMicrokernel {
-        mr: SCALAR_MR_F64,
-        nr: SCALAR_NR_F64,
-        kc: 256,
-        func: gemm_microkernel_f64_4x4_scalar,
-    }
+    gemm_kernel!(
+        SCALAR_MR_F64,
+        SCALAR_NR_F64,
+        256,
+        gemm_microkernel_f64_4x4_scalar
+    )
 }
 
 fn gemm_microkernel_override() -> Option<String> {
@@ -455,21 +438,11 @@ fn gemm_microkernel_default() -> GemmMicrokernel {
     #[cfg(target_arch = "x86_64")]
     {
         if is_x86_feature_detected!("avx512f") && is_x86_feature_detected!("fma") {
-            return GemmMicrokernel {
-                mr: 8,
-                nr: 8,
-                kc: 128,
-                func: call_gemm_microkernel_f64_8x8_x86_64,
-            };
+            return gemm_kernel!(8, 8, 128, gemm_microkernel_f64_8x8_x86_64);
         }
 
         if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
-            return GemmMicrokernel {
-                mr: 8,
-                nr: 4,
-                kc: 192,
-                func: call_gemm_microkernel_f64_8x4_x86_64,
-            };
+            return gemm_kernel!(8, 4, 192, gemm_microkernel_f64_8x4_x86_64);
         }
 
         return scalar_4x4_kernel();
@@ -477,12 +450,7 @@ fn gemm_microkernel_default() -> GemmMicrokernel {
 
     #[cfg(target_arch = "aarch64")]
     {
-        return GemmMicrokernel {
-            mr: 6,
-            nr: 8,
-            kc: 192,
-            func: call_gemm_microkernel_f64_6x8_aarch64,
-        };
+        return gemm_kernel!(6, 8, 192, gemm_microkernel_f64_6x8_aarch64);
     }
 
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
@@ -498,21 +466,11 @@ fn gemm_microkernel_from_override(override_name: &str) -> Option<GemmMicrokernel
 
         if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
             if override_name == "avx2-4x4" {
-                return Some(GemmMicrokernel {
-                    mr: 4,
-                    nr: 4,
-                    kc: 256,
-                    func: call_gemm_microkernel_f64_4x4_x86_64,
-                });
+                return Some(gemm_kernel!(4, 4, 256, gemm_microkernel_f64_4x4_x86_64));
             }
 
             if override_name == "avx2-8x4" {
-                return Some(GemmMicrokernel {
-                    mr: 8,
-                    nr: 4,
-                    kc: 192,
-                    func: call_gemm_microkernel_f64_8x4_x86_64,
-                });
+                return Some(gemm_kernel!(8, 4, 192, gemm_microkernel_f64_8x4_x86_64));
             }
         }
 
@@ -520,24 +478,14 @@ fn gemm_microkernel_from_override(override_name: &str) -> Option<GemmMicrokernel
             && is_x86_feature_detected!("fma")
             && override_name == "avx512-8x8"
         {
-            return Some(GemmMicrokernel {
-                mr: 8,
-                nr: 8,
-                kc: 128,
-                func: call_gemm_microkernel_f64_8x8_x86_64,
-            });
+            return Some(gemm_kernel!(8, 8, 128, gemm_microkernel_f64_8x8_x86_64));
         }
 
         if is_x86_feature_detected!("avx512f")
             && is_x86_feature_detected!("fma")
             && override_name == "avx512-16x14"
         {
-            return Some(GemmMicrokernel {
-                mr: 8,
-                nr: 8,
-                kc: 128,
-                func: call_gemm_microkernel_f64_8x8_x86_64,
-            });
+            return Some(gemm_kernel!(8, 8, 128, gemm_microkernel_f64_8x8_x86_64));
         }
     }
 
@@ -548,67 +496,15 @@ fn gemm_microkernel_from_override(override_name: &str) -> Option<GemmMicrokernel
         }
 
         if override_name == "neon-4x4" {
-            return Some(GemmMicrokernel {
-                mr: 4,
-                nr: 4,
-                kc: 256,
-                func: call_gemm_microkernel_f64_4x4_aarch64,
-            });
+            return Some(gemm_kernel!(4, 4, 256, gemm_microkernel_f64_4x4_aarch64));
         }
 
         if override_name == "neon-6x8" {
-            return Some(GemmMicrokernel {
-                mr: 6,
-                nr: 8,
-                kc: 192,
-                func: call_gemm_microkernel_f64_6x8_aarch64,
-            });
+            return Some(gemm_kernel!(6, 8, 192, gemm_microkernel_f64_6x8_aarch64));
         }
     }
 
     None
-}
-
-#[cfg(target_arch = "x86_64")]
-unsafe fn call_gemm_microkernel_f64_8x4_x86_64(
-    k: usize,
-    alpha: f64,
-    a: *const f64,
-    b: *const f64,
-    beta: f64,
-    c: *mut f64,
-    rs_c: usize,
-    cs_c: usize,
-) {
-    unsafe { gemm_microkernel_f64_8x4_x86_64(k, alpha, a, b, beta, c, rs_c, cs_c) }
-}
-
-#[cfg(target_arch = "x86_64")]
-unsafe fn call_gemm_microkernel_f64_8x8_x86_64(
-    k: usize,
-    alpha: f64,
-    a: *const f64,
-    b: *const f64,
-    beta: f64,
-    c: *mut f64,
-    rs_c: usize,
-    cs_c: usize,
-) {
-    unsafe { gemm_microkernel_f64_8x8_x86_64(k, alpha, a, b, beta, c, rs_c, cs_c) }
-}
-
-#[cfg(target_arch = "aarch64")]
-unsafe fn call_gemm_microkernel_f64_6x8_aarch64(
-    k: usize,
-    alpha: f64,
-    a: *const f64,
-    b: *const f64,
-    beta: f64,
-    c: *mut f64,
-    rs_c: usize,
-    cs_c: usize,
-) {
-    unsafe { gemm_microkernel_f64_6x8_aarch64(k, alpha, a, b, beta, c, rs_c, cs_c) }
 }
 
 fn gemm_microkernel_dispatcher() -> GemmMicrokernel {

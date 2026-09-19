@@ -13,6 +13,45 @@ use crate::core::matrix::{MatrixRead, MatrixWrite};
 use crate::core::vector::VectorRead;
 use crate::core::vector::VectorWrite;
 
+type GemvMicrokernelFn =
+    unsafe fn(K: usize, alpha: f64, beta: f64, a: *const f64, x: *const f64, y: *mut f64);
+
+#[derive(Debug, Clone, Copy)]
+pub struct GemvBlocking {
+    pub m_block: usize,
+    pub k_block: usize,
+}
+
+impl Default for GemvBlocking {
+    fn default() -> Self {
+        Self {
+            m_block: 64,
+            k_block: 64,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct GemvMicrokernel {
+    m_unroll: usize,
+    k_unroll: usize,
+    func: GemvMicrokernelFn,
+}
+
+impl GemvMicrokernel {
+    unsafe fn run(
+        &self,
+        K: usize,
+        alpha: f64,
+        beta: f64,
+        a: *const f64,
+        x: *const f64,
+        y: *mut f64,
+    ) {
+        (self.func)(K, alpha, beta, a, x, y);
+    }
+}
+
 pub fn basic_gemv_kernel<A, B, C, T>(a: &A, b: &B, out: &mut C, alpha: Option<T>, beta: Option<T>)
 where
     A: MatrixRead<T>,
@@ -55,21 +94,6 @@ where
                 sum += *a.get(i, j) * (*b.get(j));
             }
             out.accumulate(i, alpha * sum);
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct GemvBlocking {
-    pub m_block: usize,
-    pub k_block: usize,
-}
-
-impl Default for GemvBlocking {
-    fn default() -> Self {
-        Self {
-            m_block: 64,
-            k_block: 64,
         }
     }
 }
