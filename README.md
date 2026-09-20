@@ -2,12 +2,12 @@
 
 `ferrum` is a Rust-first computational linear algebra library with a Python interface.
 
-The project is structured as a high-performance core crate (Rust) plus a thin Python boundary (PyO3/maturin). The repository currently focuses on architecture, packaging, and verification scaffolding, so it is intentionally incomplete while still reflecting a realistic library layout.
+The project is structured as a high-performance core crate (Rust) plus a thin Python boundary (PyO3/maturin). The repository currently focuses on architecture, and algorithms
 
 ## Status
 
 - Stage: pre-alpha scaffold
-- Target: dense/spectral matrix routines with parallel Rust execution
+- Target: dense/spectral matrix routines with SIMD intrinsics
 - Python package: `ferrum`
 - Rust crate type: `cdylib` extension module
 
@@ -26,6 +26,7 @@ The project is structured as a high-performance core crate (Rust) plus a thin Py
 
 ## Planned algorithm track
 
+- SIMD microkernels for gemm and gemv
 - Arithmetic primitives
 - QR decomposition
 - FFT routines
@@ -34,6 +35,7 @@ The project is structured as a high-performance core crate (Rust) plus a thin Py
 - Singular value decomposition
 - Cholesky decomposition
 - Least squares via QR
+- Multithreading
 
 ## Repository layout
 
